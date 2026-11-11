@@ -22,7 +22,7 @@ body { margin: 0; }
 <title>관계형 N-Back</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
 <style>
-/* Layout: one narrow column that moves between three states (settings, trial, result). The stimulus card is the only large object; everything else stays quiet. */
+/* Layout: one narrow column that moves between settings, trial and result. The stimulus card is the only large object; everything else stays quiet. */
 :root {
   --bg: #F2F5F8;
   --surface: #FFFFFF;
@@ -83,6 +83,7 @@ h1 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 700; text-wrap:
 p { margin: 0; }
 .eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .lede { color: var(--muted); max-width: 46ch; }
+.hint { font-size: 13px; color: var(--muted); }
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
 /* Worked example */
@@ -101,10 +102,11 @@ legend { padding: 0; font-size: 13px; font-weight: 500; color: var(--muted); mar
 .seg label { flex: 1; min-width: 0; position: relative; }
 .seg label + label { border-left: 1px solid var(--line); }
 .seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.seg span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 8px; font-size: 14px; text-align: center; }
+.seg span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 4px; font-size: 14px; text-align: center; }
 .seg input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
 .seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: -3px; }
 .seg input:checked:focus-visible + span { outline-color: var(--ink); }
+.checks { display: flex; flex-direction: column; gap: 12px; }
 .check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; cursor: pointer; }
 .check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
 .check small { display: block; color: var(--muted); font-size: 13px; }
@@ -116,26 +118,38 @@ button { font: inherit; color: inherit; }
 .btn:focus-visible, .link:focus-visible, .match:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .actions { display: flex; flex-direction: column; gap: 10px; }
 
-.history { display: flex; flex-direction: column; gap: 6px; }
+/* Records */
+.history { display: flex; flex-direction: column; gap: 10px; }
 .history h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+.rec-sum { font-size: 14px; }
+.chart { display: flex; align-items: stretch; gap: 6px; height: 104px; padding-top: 4px; }
+.chart .col { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.chart .barwrap { flex: 1; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.chart .bar { width: 100%; max-width: 28px; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--accent); }
+.chart .bar.low { background: var(--muted); }
+.chart small { font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
 .history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .history li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
-.history li span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.history li span:first-child { min-width: 0; }
+.history li span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
 .note { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
 
 /* Trial screen */
 .status { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
 .status b { font-family: var(--font-mono); font-weight: 600; }
+.status-actions { display: flex; gap: 4px; }
 .phase { color: var(--muted); }
-.link { background: none; border: 0; color: var(--muted); text-decoration: underline; min-height: 44px; padding: 0 4px; cursor: pointer; font-size: 14px; }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; min-height: 44px; padding: 0 8px; cursor: pointer; font-size: 14px; }
 .bar { height: 4px; border-radius: 2px; background: var(--soft); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); }
 .bar i.run { animation: fill var(--dur, 3500ms) linear forwards; }
 @keyframes fill { from { width: 0; } to { width: 100%; } }
 
-.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-height: 230px; padding: 20px; display: flex; align-items: center; justify-content: center; }
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-height: 230px; padding: 20px; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 16px 24px; }
 .stage.ok { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
 .stage.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.stage.paused > * { visibility: hidden; }
+.side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; }
 .pair { display: flex; align-items: baseline; justify-content: center; gap: clamp(12px, 4vw, 24px); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .pair .prev { font-size: clamp(40px, 12vw, 56px); font-weight: 500; color: var(--muted); }
 .pair .arrow { font-size: 26px; color: var(--muted); }
@@ -147,21 +161,42 @@ button { font: inherit; color: inherit; }
 .dot, .ring { width: 48%; aspect-ratio: 1; border-radius: 50%; }
 .dot { background: var(--accent); }
 .ring { border: 2px solid var(--muted); }
+.rotpair { display: flex; align-items: center; justify-content: center; gap: 14px; }
+.rotpair .arrow { font-size: 26px; color: var(--muted); font-family: var(--font-mono); }
+.rotbox { display: block; flex: none; }
+.rotbox svg { display: block; width: 100%; height: auto; }
+.rotbox path { fill: currentColor; }
+.rotbox.cur { width: clamp(88px, 28vw, 120px); color: var(--ink); }
+.rotbox.prev { width: clamp(44px, 14vw, 60px); color: var(--muted); }
+.stage.multi { min-height: 0; }
+.stage.multi .board { width: clamp(130px, 42vw, 180px); }
+.stage.multi .pair { gap: 10px; }
+.stage.multi .pair .cur { font-size: clamp(48px, 14vw, 64px); }
+.stage.multi .pair .prev { font-size: clamp(26px, 8vw, 34px); }
+.stage.multi .rotbox.cur { width: 64px; }
+.stage.multi .rotbox.prev { width: 34px; }
 .feedback { min-height: 1.6em; text-align: center; font-size: 14px; color: var(--muted); }
 .feedback.ok { color: var(--good); font-weight: 700; }
 .feedback.bad { color: var(--bad); font-weight: 700; }
 
-.match { width: 100%; min-height: 84px; border-radius: 16px; border: 2px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-size: 22px; font-weight: 700; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.matchrow { display: flex; gap: 10px; }
+.match { flex: 1; min-width: 0; min-height: 84px; border-radius: 16px; border: 2px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-size: 20px; font-weight: 700; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 0 6px; }
+.matchrow.cols2 .match, .matchrow.cols3 .match { font-size: 17px; }
+.match .kbd { font-family: var(--font-mono); font-size: 11px; font-weight: 500; opacity: 0.75; }
 .match[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: var(--bg); }
-.match[aria-disabled="true"] { background: var(--surface); border: 2px dashed var(--line); color: var(--muted); font-weight: 500; font-size: 18px; cursor: default; }
+.match[aria-disabled="true"] { background: var(--surface); border: 2px dashed var(--line); color: var(--muted); font-weight: 500; font-size: 16px; cursor: default; }
 .keys { text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+@media (pointer: coarse) { .keys, .match .kbd { display: none; } }
 
 /* Result */
 .big { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 72px; line-height: 1; font-weight: 600; }
-.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
-.stats div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-.stats dt { font-size: 13px; color: var(--muted); }
-.stats dd { margin: 0; font-family: var(--font-mono); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chblock { display: flex; flex-direction: column; gap: 8px; }
+.chblock + .chblock { margin-top: 12px; }
+.chtitle { font-size: 14px; font-weight: 700; }
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.stats div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 10px; }
+.stats dt { font-size: 12px; color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--font-mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .advice { color: var(--ink); }
 
 @media (prefers-reduced-motion: reduce) { .btn, .match { transition: none; } }
@@ -179,22 +214,29 @@ button { font: inherit; color: inherit; }
     <p class="lede">숫자나 위치 자체가 아니라, 직전 자극에서 지금 자극으로 바뀐 변화를 기억하고 N번 전의 변화와 비교합니다.</p>
 
     <div class="example" role="group" aria-label="N=2 예시">
-      <div class="example-row">
-        <span class="ex-num">2</span><span class="ex-delta hit">+3</span>
-        <span class="ex-num">5</span><span class="ex-delta">−4</span>
-        <span class="ex-num">1</span><span class="ex-delta hit">+3</span>
-        <span class="ex-num">4</span>
-      </div>
-      <p class="example-cap">N=2 예시: 마지막 변화(+3)가 두 번 전의 변화(+3)와 같으므로 「같음」을 누릅니다. 숫자 4나 1이 아니라 변화량을 비교하는 것이 핵심입니다.</p>
+      <div class="example-row" id="exRow"></div>
+      <p class="example-cap" id="exCap"></p>
     </div>
 
     <form id="settings" onsubmit="return false">
       <fieldset>
         <legend>모드</legend>
         <div class="seg">
-          <label><input type="radio" name="mode" id="mode-num" value="num" checked><span>숫자 변화량</span></label>
-          <label><input type="radio" name="mode" id="mode-sp" value="sp"><span>공간 이동</span></label>
+          <label><input type="radio" name="mode" id="mode-num" value="num" checked><span>숫자</span></label>
+          <label><input type="radio" name="mode" id="mode-sp" value="sp"><span>공간</span></label>
+          <label><input type="radio" name="mode" id="mode-rot" value="rot"><span>회전</span></label>
+          <label><input type="radio" name="mode" id="mode-dual" value="dual"><span>듀얼</span></label>
+          <label><input type="radio" name="mode" id="mode-triple" value="triple"><span>트리플</span></label>
         </div>
+        <p class="hint" id="modeDesc"></p>
+      </fieldset>
+      <fieldset>
+        <legend>규칙</legend>
+        <div class="seg">
+          <label><input type="radio" name="rule" id="rule-same" value="same" checked><span>같은 변화</span></label>
+          <label><input type="radio" name="rule" id="rule-opp" value="opp"><span>반대 변화</span></label>
+        </div>
+        <p class="hint" id="ruleDesc"></p>
       </fieldset>
       <fieldset>
         <legend>N (몇 번 전과 비교할지)</legend>
@@ -204,27 +246,51 @@ button { font: inherit; color: inherit; }
           <label><input type="radio" name="n" id="n-3" value="3"><span>3</span></label>
           <label><input type="radio" name="n" id="n-4" value="4"><span>4</span></label>
           <label><input type="radio" name="n" id="n-5" value="5"><span>5</span></label>
+          <label><input type="radio" name="n" id="n-6" value="6"><span>6</span></label>
         </div>
       </fieldset>
       <fieldset>
         <legend>시도당 시간</legend>
         <div class="seg">
+          <label><input type="radio" name="speed" id="speed-15" value="1500"><span>1.5초</span></label>
           <label><input type="radio" name="speed" id="speed-25" value="2500"><span>2.5초</span></label>
           <label><input type="radio" name="speed" id="speed-35" value="3500" checked><span>3.5초</span></label>
           <label><input type="radio" name="speed" id="speed-50" value="5000"><span>5초</span></label>
         </div>
       </fieldset>
-      <label class="check" for="showPrev">
-        <input type="checkbox" id="showPrev" checked>
-        <span>직전 숫자·위치를 함께 보여주기<small>끄면 직전 자극까지 기억해야 해서 더 어렵습니다.</small></span>
-      </label>
+      <fieldset>
+        <legend>블록 길이 (판정 횟수)</legend>
+        <div class="seg">
+          <label><input type="radio" name="len" id="len-20" value="20" checked><span>20회</span></label>
+          <label><input type="radio" name="len" id="len-30" value="30"><span>30회</span></label>
+          <label><input type="radio" name="len" id="len-40" value="40"><span>40회</span></label>
+        </div>
+      </fieldset>
+      <div class="checks">
+        <label class="check" for="showPrev">
+          <input type="checkbox" id="showPrev" checked>
+          <span>직전 자극을 함께 보여주기<small>끄면 직전 자극까지 기억해야 해서 더 어렵습니다.</small></span>
+        </label>
+        <label class="check" for="optFeedback">
+          <input type="checkbox" id="optFeedback" checked>
+          <span>시도마다 정답 피드백 보기<small>끄면 틀린 것도 바로 알 수 없어서 더 어렵습니다. 소리와 진동도 함께 꺼집니다.</small></span>
+        </label>
+        <label class="check" for="optSound">
+          <input type="checkbox" id="optSound">
+          <span>효과음과 진동<small>정답은 높은 소리, 오답은 낮은 소리와 짧은 진동입니다.</small></span>
+        </label>
+      </div>
       <p class="est" id="est"></p>
       <button type="button" class="btn primary" id="btnStart">블록 시작</button>
     </form>
 
-    <div class="history" id="history" hidden>
-      <h2>최근 기록</h2>
+    <div class="history" id="records" hidden>
+      <h2>내 기록</h2>
+      <p class="rec-sum" id="recSummary"></p>
+      <div class="chart" id="recChart" role="img" aria-label=""></div>
+      <p class="hint">막대는 최근 블록의 정확도, 아래 숫자는 그때의 N입니다.</p>
       <ul id="historyList"></ul>
+      <button type="button" class="link" id="btnReset">기록 지우기</button>
     </div>
 
     <p class="note">n-back 훈련이 지능이나 문제 해결력 같은 먼 영역까지 높인다는 근거는 아직 부족합니다. 관계형 변형도 마찬가지로 검증 중이므로, 새로운 종류의 작업기억 과제를 경험하는 연습으로 사용하세요.</p>
@@ -233,22 +299,32 @@ button { font: inherit; color: inherit; }
   <section id="screenPlay" hidden>
     <div class="status">
       <div><b id="stN">N=1</b> · <span id="stProg" class="mono">1 / 22</span> · <span id="stPhase" class="phase">기억 단계</span></div>
-      <button type="button" class="link" id="btnQuit">중단</button>
+      <div class="status-actions">
+        <button type="button" class="link" id="btnPause">일시정지</button>
+        <button type="button" class="link" id="btnQuit">중단</button>
+      </div>
     </div>
     <div class="bar"><i id="barFill"></i></div>
 
     <div class="stage" id="stage">
-      <div class="pair" id="stageNum" role="img" aria-label="">
-        <span class="prev" id="prevNum"></span>
-        <span class="arrow" id="arrow">→</span>
-        <span class="cur" id="curNum"></span>
-      </div>
       <div class="board" id="stageBoard" role="img" aria-label="" hidden></div>
+      <div class="side" id="side">
+        <div class="pair" id="stageNum" role="img" aria-label="" hidden>
+          <span class="prev" id="prevNum"></span>
+          <span class="arrow" id="numArrow">→</span>
+          <span class="cur" id="curNum"></span>
+        </div>
+        <div class="rotpair" id="stageRot" role="img" aria-label="" hidden>
+          <span class="rotbox prev" id="prevRotBox"><svg viewBox="-50 -50 100 100" aria-hidden="true"><path id="prevRotP" d="M0,-40 L26,-8 L10,-8 L10,38 L-10,38 L-10,-8 L-26,-8 Z"/></svg></span>
+          <span class="arrow" id="rotArrow">→</span>
+          <span class="rotbox cur"><svg viewBox="-50 -50 100 100" aria-hidden="true"><path id="curRotP" d="M0,-40 L26,-8 L10,-8 L10,38 L-10,38 L-10,-8 L-26,-8 Z"/></svg></span>
+        </div>
+      </div>
     </div>
     <p class="feedback" id="feedback" aria-live="polite"></p>
 
-    <button type="button" class="match" id="btnMatch" aria-pressed="false">같음</button>
-    <p class="keys">Space · Enter · J</p>
+    <div class="matchrow" id="matchRow"></div>
+    <p class="keys" id="keysHint"></p>
   </section>
 
   <section id="screenResult" hidden>
@@ -257,12 +333,8 @@ button { font: inherit; color: inherit; }
       <p class="big" id="resAcc">0%</p>
       <p class="lede" id="resSub"></p>
     </div>
-    <dl class="stats">
-      <div><dt>맞게 누름</dt><dd id="stHit">0</dd></div>
-      <div><dt>놓침</dt><dd id="stMiss">0</dd></div>
-      <div><dt>잘못 누름</dt><dd id="stFa">0</dd></div>
-      <div><dt>맞게 거름</dt><dd id="stCr">0</dd></div>
-    </dl>
+    <div id="resBody"></div>
+    <p class="hint">d′는 「같음」인 시도와 아닌 시도를 구별하는 민감도입니다. 0이면 찍기 수준이고 2 이상이면 잘 구별하는 편입니다.</p>
     <p class="advice" id="resAdvice"></p>
     <div class="actions">
       <button type="button" class="btn primary" id="btnNext">다음 블록</button>
@@ -274,8 +346,13 @@ button { font: inherit; color: inherit; }
 
 <script>
 /*LOGIC_START*/
-const GRID = 4, NUM_MIN = 1, NUM_MAX = 9, SCORABLE = 20, MAX_N = 5;
+const GRID = 4, NUM_MIN = 1, NUM_MAX = 9, ROT_STEPS = 8, MAX_N = 6;
 
+function channelsFor(mode) {
+  if (mode === 'dual') return ['num', 'sp'];
+  if (mode === 'triple') return ['num', 'sp', 'rot'];
+  return [mode];
+}
 function randInt(rng, n) { return Math.floor(rng() * n); }
 function pick(rng, arr) { return arr[randInt(rng, arr.length)]; }
 
@@ -283,33 +360,48 @@ function allStimuli(mode) {
   const a = [];
   if (mode === 'num') {
     for (let v = NUM_MIN; v <= NUM_MAX; v++) a.push(v);
+  } else if (mode === 'rot') {
+    for (let r = 0; r < ROT_STEPS; r++) a.push(r);
   } else {
     for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) a.push({ x: x, y: y });
   }
   return a;
 }
-function same(mode, a, b) { return mode === 'num' ? a === b : (a.x === b.x && a.y === b.y); }
+function same(mode, a, b) { return mode === 'sp' ? (a.x === b.x && a.y === b.y) : a === b; }
 
 // Relation between item t-1 and item t, as a comparable string.
 function relKey(mode, seq, t) {
   if (t < 1) return null;
   const a = seq[t - 1], b = seq[t];
-  return mode === 'num' ? String(b - a) : (b.x - a.x) + ',' + (b.y - a.y);
+  if (mode === 'num') return String(b - a);
+  if (mode === 'rot') return String(((b - a) % ROT_STEPS + ROT_STEPS) % ROT_STEPS);
+  return (b.x - a.x) + ',' + (b.y - a.y);
 }
-// A trial is a target when its relation equals the relation n trials earlier.
-function isTarget(mode, seq, t, n) {
-  return t >= n + 1 && relKey(mode, seq, t) === relKey(mode, seq, t - n);
+// The exact opposite of a relation (+3 becomes -3, a clockwise turn becomes counter-clockwise).
+function negKey(mode, key) {
+  if (mode === 'num') return String(-Number(key));
+  if (mode === 'rot') return String((ROT_STEPS - Number(key)) % ROT_STEPS);
+  const p = key.split(',').map(Number);
+  return (-p[0]) + ',' + (-p[1]);
 }
-function countTargets(mode, seq, n) {
+// The relation that a trial must show to count as a target, given the rule.
+function refKey(mode, seq, t, n, rule) {
+  const k = relKey(mode, seq, t - n);
+  return rule === 'opp' ? negKey(mode, k) : k;
+}
+function isTarget(mode, seq, t, n, rule) {
+  return t >= n + 1 && relKey(mode, seq, t) === refKey(mode, seq, t, n, rule);
+}
+function countTargets(mode, seq, n, rule) {
   let c = 0;
-  for (let t = n + 1; t < seq.length; t++) if (isTarget(mode, seq, t, n)) c++;
+  for (let t = n + 1; t < seq.length; t++) if (isTarget(mode, seq, t, n, rule)) c++;
   return c;
 }
-// True when, with seq[0..t-1] fixed, some next stimulus would repeat the relation from n trials earlier.
-// Used as a lookahead so the walk does not drift into corners where a repeat is impossible.
-function canRepeat(mode, seq, t, n, pool) {
+// True when, with seq[0..t-1] fixed, some next stimulus would be a target.
+// Used as a lookahead so the walk does not drift into corners where a target is impossible.
+function canRepeat(mode, seq, t, n, rule, pool) {
   if (t < n + 1) return true;
-  const ref = relKey(mode, seq, t - n);
+  const ref = refKey(mode, seq, t, n, rule);
   const prev = seq[t - 1];
   for (let i = 0; i < pool.length; i++) {
     if (same(mode, pool[i], prev)) continue;
@@ -320,7 +412,7 @@ function canRepeat(mode, seq, t, n, pool) {
   }
   return false;
 }
-function generateOnce(mode, n, total, rate, rng) {
+function generateOnce(mode, n, total, rate, rng, rule) {
   const pool = allStimuli(mode);
   const seq = [pick(rng, pool)];
   for (let t = 1; t < total; t++) {
@@ -328,7 +420,7 @@ function generateOnce(mode, n, total, rate, rng) {
     const cands = pool.filter(function (s) { return !same(mode, s, prev); });
     let bucket = cands;
     if (t >= n + 1) {
-      const ref = relKey(mode, seq, t - n);
+      const ref = refKey(mode, seq, t, n, rule);
       const hit = [], miss = [];
       cands.forEach(function (s) {
         seq[t] = s;
@@ -341,7 +433,7 @@ function generateOnce(mode, n, total, rate, rng) {
     if (t + 1 < total) {
       const keep = bucket.filter(function (s) {
         seq[t] = s;
-        const ok = canRepeat(mode, seq, t + 1, n, pool);
+        const ok = canRepeat(mode, seq, t + 1, n, rule, pool);
         seq.length = t;
         return ok;
       });
@@ -351,16 +443,18 @@ function generateOnce(mode, n, total, rate, rng) {
   }
   return seq;
 }
-// A block has SCORABLE judged trials, preceded by n+1 trials used to store relations.
-function blockLength(n) { return SCORABLE + n + 1; }
-function generate(mode, n, rng) {
+// A block has `scorable` judged trials, preceded by n+1 trials used to store relations.
+function blockLength(n, scorable) { return scorable + n + 1; }
+function generate(mode, n, rng, rule, scorable) {
   rng = rng || Math.random;
-  const total = blockLength(n);
-  const lo = Math.round(SCORABLE * 0.2), hi = Math.round(SCORABLE * 0.4);
+  rule = rule || 'same';
+  scorable = scorable || 20;
+  const total = blockLength(n, scorable);
+  const lo = Math.round(scorable * 0.2), hi = Math.round(scorable * 0.4);
   let seq = null;
-  for (let i = 0; i < 80; i++) {
-    seq = generateOnce(mode, n, total, 0.3, rng);
-    const c = countTargets(mode, seq, n);
+  for (let i = 0; i < 120; i++) {
+    seq = generateOnce(mode, n, total, 0.3, rng, rule);
+    const c = countTargets(mode, seq, n, rule);
     if (c >= lo && c <= hi) return seq;
   }
   return seq;
@@ -373,15 +467,79 @@ function nextLevel(n, acc) {
 function fmtSigned(v) { return v > 0 ? '+' + v : (v < 0 ? '−' + (-v) : '0'); }
 function fmtRel(mode, key) {
   if (mode === 'num') return fmtSigned(Number(key));
+  if (mode === 'rot') {
+    let deg = Number(key) * (360 / ROT_STEPS);
+    if (deg > 180) deg -= 360;
+    return fmtSigned(deg) + '°';
+  }
   const p = key.split(',').map(Number);
   return '(' + fmtSigned(p[0]) + ', ' + fmtSigned(p[1]) + ')';
+}
+// Inverse normal CDF (Acklam's rational approximation).
+function probit(p) {
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const plow = 0.02425, phigh = 1 - plow;
+  let q, r;
+  if (p < plow) {
+    q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (p <= phigh) {
+    q = p - 0.5; r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+  q = Math.sqrt(-2 * Math.log(1 - p));
+  return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+}
+// Sensitivity index with a log-linear correction so that perfect or zero rates stay finite.
+function dPrime(st) {
+  const targets = st.hit + st.miss, others = st.fa + st.cr;
+  return probit((st.hit + 0.5) / (targets + 1)) - probit((st.fa + 0.5) / (others + 1));
+}
+function dayNum(ts) {
+  return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / 86400000);
+}
+// Consecutive practice days ending today (or yesterday, so the streak survives until tonight).
+function streakFromDays(days, today) {
+  const set = {};
+  days.forEach(function (d) { set[d] = true; });
+  let d = set[today] ? today : (set[today - 1] ? today - 1 : null);
+  if (d === null) return 0;
+  let c = 0;
+  while (set[d]) { c++; d--; }
+  return c;
+}
+// Highest N reached with at least 85% accuracy for this mode and rule (0 when none yet).
+function bestN(history, mode, rule) {
+  let best = 0;
+  history.forEach(function (r) {
+    if (r.mode === mode && (r.rule || 'same') === rule && r.acc >= 0.85 && r.n > best) best = r.n;
+  });
+  return best;
 }
 /*LOGIC_END*/
 
 (function () {
   const $ = function (id) { return document.getElementById(id); };
-  const FEEDBACK_MS = 700;
   const KEY = 'relnback.v1';
+  const LABEL = { num: '숫자', sp: '위치', rot: '회전' };
+  const KEYMAP = { 2: ['f', 'j'], 3: ['f', 'g', 'j'] };
+  const KEYSHOW = { 1: ['Space'], 2: ['F', 'J'], 3: ['F', 'G', 'J'] };
+  const MODE_NAMES = { num: '숫자 변화량', sp: '공간 이동', rot: '도형 회전', dual: '듀얼(숫자+위치)', triple: '트리플(숫자+위치+회전)' };
+  const MODE_DESC = {
+    num: '숫자가 바뀐 양을 기억합니다. 예를 들어 2에서 5로 바뀌면 +3입니다.',
+    sp: '점이 이동한 방향과 거리를 기억합니다. 오른쪽 아래로 한 칸 이동하면 (+1, +1)입니다.',
+    rot: '화살표가 돌아간 각도를 기억합니다. +는 시계 방향이고 45° 단위로 돌아갑니다.',
+    dual: '숫자 변화와 위치 이동을 동시에 추적하고, 버튼 두 개로 각각 판단합니다.',
+    triple: '숫자, 위치, 회전 세 가지를 동시에 추적합니다. 버튼 세 개로 각각 판단하는 가장 어려운 모드입니다.'
+  };
+  const RULE_DESC = {
+    same: '변화가 N번 전의 변화와 같으면 「같음」을 누릅니다.',
+    opp: '변화가 N번 전의 변화와 정반대(+3과 −3, 시계 방향과 반대 방향)이면 「반대」를 누릅니다.'
+  };
 
   function loadStore() {
     try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; }
@@ -394,11 +552,11 @@ function fmtRel(mode, key) {
   store.history = Array.isArray(store.history) ? store.history : [];
 
   const state = {
-    mode: 'num', n: 1, speed: 3500, showPrev: true,
-    seq: [], t: 0, pressed: false, locked: false, running: false,
-    stats: { hit: 0, miss: 0, fa: 0, cr: 0 }, timer: null, nextN: 1
+    cfg: null, channels: [], btns: [], total: 0, t: 0, fbMs: 0,
+    locked: false, evaluated: false, running: false, paused: false, timer: null, nextN: 1
   };
 
+  /* ---------- settings ---------- */
   function getVal(name) {
     const el = document.querySelector('input[name="' + name + '"]:checked');
     return el ? el.value : null;
@@ -408,45 +566,121 @@ function fmtRel(mode, key) {
     if (el) el.checked = true;
   }
   function readSettings() {
-    state.mode = getVal('mode') || 'num';
-    state.n = Number(getVal('n')) || 1;
-    state.speed = Number(getVal('speed')) || 3500;
-    state.showPrev = $('showPrev').checked;
-    store.settings = { mode: state.mode, n: state.n, speed: state.speed, showPrev: state.showPrev };
+    const cfg = {
+      mode: getVal('mode') || 'num',
+      rule: getVal('rule') || 'same',
+      n: Number(getVal('n')) || 1,
+      speed: Number(getVal('speed')) || 3500,
+      scorable: Number(getVal('len')) || 20,
+      showPrev: $('showPrev').checked,
+      feedback: $('optFeedback').checked,
+      sound: $('optSound').checked
+    };
+    state.cfg = cfg;
+    store.settings = cfg;
     saveStore();
+    return cfg;
   }
   function applySaved() {
     const s = store.settings;
     if (s.mode) setRadio('mode', s.mode);
+    if (s.rule) setRadio('rule', s.rule);
     if (s.n) setRadio('n', s.n);
     if (s.speed) setRadio('speed', s.speed);
+    if (s.scorable) setRadio('len', s.scorable);
     if (typeof s.showPrev === 'boolean') $('showPrev').checked = s.showPrev;
+    if (typeof s.feedback === 'boolean') $('optFeedback').checked = s.feedback;
+    if (typeof s.sound === 'boolean') $('optSound').checked = s.sound;
   }
   function showScreen(name) {
     ['Start', 'Play', 'Result'].forEach(function (s) { $('screen' + s).hidden = (s !== name); });
     window.scrollTo(0, 0);
   }
-  function modeName(m) { return m === 'num' ? '숫자 변화량' : '공간 이동'; }
+  function ruleName(r) { return r === 'opp' ? '반대 변화' : '같은 변화'; }
 
   function updateEstimate() {
+    const mode = getVal('mode') || 'num';
     const n = Number(getVal('n')) || 1;
     const speed = Number(getVal('speed')) || 3500;
-    const total = blockLength(n);
+    const S = Number(getVal('len')) || 20;
+    const chs = channelsFor(mode).length;
+    const total = blockLength(n, S);
     const sec = Math.round(total * speed / 1000);
     const m = Math.floor(sec / 60), s = sec % 60;
-    $('est').textContent = '한 블록 ' + total + '시도 (판정 ' + SCORABLE + '회) · 약 ' + (m ? m + '분 ' : '') + s + '초';
+    $('est').textContent = '한 블록 ' + total + '시도 (판정 ' + S + '회' + (chs > 1 ? ' × ' + chs + '개 스트림' : '') + ') · 약 ' + (m ? m + '분 ' : '') + s + '초';
   }
 
-  function renderHistory() {
+  function buildExample(rule) {
+    const nums = rule === 'opp' ? [6, 9, 5, 2] : [2, 5, 1, 4];
+    const deltas = rule === 'opp' ? ['+3', '−4', '−3'] : ['+3', '−4', '+3'];
+    const row = $('exRow');
+    row.innerHTML = '';
+    nums.forEach(function (v, i) {
+      const num = document.createElement('span');
+      num.className = 'ex-num';
+      num.textContent = v;
+      row.appendChild(num);
+      if (i < deltas.length) {
+        const chip = document.createElement('span');
+        chip.className = 'ex-delta' + ((i === 0 || i === 2) ? ' hit' : '');
+        chip.textContent = deltas[i];
+        row.appendChild(chip);
+      }
+    });
+    $('exCap').textContent = rule === 'opp'
+      ? 'N=2 예시(숫자): 마지막 변화(−3)가 두 번 전의 변화(+3)와 정반대이므로 「반대」를 누릅니다.'
+      : 'N=2 예시(숫자): 마지막 변화(+3)가 두 번 전의 변화(+3)와 같으므로 「같음」을 누릅니다. 숫자 자체가 아니라 변화량을 비교합니다.';
+  }
+
+  function updateDescriptions() {
+    const mode = getVal('mode') || 'num';
+    const rule = getVal('rule') || 'same';
+    $('modeDesc').textContent = MODE_DESC[mode];
+    $('ruleDesc').textContent = RULE_DESC[rule];
+    buildExample(rule);
+    updateEstimate();
+    renderRecords();
+  }
+
+  /* ---------- records ---------- */
+  function renderRecords() {
+    const h = store.history;
+    $('records').hidden = h.length === 0;
+    if (!h.length) return;
+    const mode = getVal('mode') || 'num';
+    const rule = getVal('rule') || 'same';
+    const streak = streakFromDays(h.map(function (r) { return dayNum(r.ts); }), dayNum(Date.now()));
+    const best = bestN(h, mode, rule);
+    $('recSummary').textContent = '연속 ' + streak + '일 · 누적 ' + h.length + '블록 · 이 모드·규칙의 최고 레벨 ' + (best ? 'N=' + best : '아직 없음');
+
+    const chart = $('recChart');
+    chart.innerHTML = '';
+    const recent = h.slice(0, 12).reverse();
+    recent.forEach(function (r) {
+      const col = document.createElement('div');
+      col.className = 'col';
+      const wrap = document.createElement('div');
+      wrap.className = 'barwrap';
+      const bar = document.createElement('div');
+      bar.className = 'bar' + (r.acc < 0.6 ? ' low' : '');
+      bar.style.height = Math.max(2, Math.round(r.acc * 100)) + '%';
+      bar.title = Math.round(r.acc * 100) + '%';
+      wrap.appendChild(bar);
+      const lab = document.createElement('small');
+      lab.textContent = r.n;
+      col.appendChild(wrap);
+      col.appendChild(lab);
+      chart.appendChild(col);
+    });
+    chart.setAttribute('aria-label', '최근 ' + recent.length + '블록 정확도, 가장 최근 ' + Math.round(h[0].acc * 100) + '%');
+
     const list = $('historyList');
     list.innerHTML = '';
-    const rows = store.history.slice(0, 5);
-    $('history').hidden = rows.length === 0;
-    rows.forEach(function (r) {
+    h.slice(0, 5).forEach(function (r) {
       const li = document.createElement('li');
       const d = new Date(r.ts);
       const left = document.createElement('span');
-      left.textContent = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' · ' + modeName(r.mode) + ' · N=' + r.n;
+      left.textContent = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' · ' + (MODE_NAMES[r.mode] || r.mode) + ((r.rule || 'same') === 'opp' ? ' · 반대' : '') + ' · N=' + r.n;
       const right = document.createElement('span');
       right.textContent = Math.round(r.acc * 100) + '%';
       li.appendChild(left); li.appendChild(right);
@@ -454,98 +688,263 @@ function fmtRel(mode, key) {
     });
   }
 
+  let resetArmed = false, resetTimer = null;
+  function onReset() {
+    const b = $('btnReset');
+    if (!resetArmed) {
+      resetArmed = true;
+      b.textContent = '한 번 더 누르면 기록이 삭제됩니다';
+      resetTimer = setTimeout(function () { resetArmed = false; b.textContent = '기록 지우기'; }, 3500);
+      return;
+    }
+    clearTimeout(resetTimer);
+    resetArmed = false;
+    b.textContent = '기록 지우기';
+    store.history = [];
+    saveStore();
+    renderRecords();
+  }
+
+  /* ---------- sound ---------- */
+  let audioCtx = null;
+  function initAudio() {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    } catch (e) { audioCtx = null; }
+  }
+  function beep(freq, dur) {
+    if (!audioCtx) return;
+    try {
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.value = 0.06;
+      o.connect(g);
+      g.connect(audioCtx.destination);
+      o.start();
+      o.stop(audioCtx.currentTime + dur);
+    } catch (e) { /* sound unavailable */ }
+  }
+  function buzz() {
+    try { if (navigator.vibrate) navigator.vibrate(70); } catch (e) { /* vibration unavailable */ }
+  }
+
   /* ---------- block flow ---------- */
+  function chOf(mode) {
+    for (let i = 0; i < state.channels.length; i++) if (state.channels[i].mode === mode) return state.channels[i];
+    return null;
+  }
+
   function startBlock() {
-    readSettings();
-    state.seq = generate(state.mode, state.n);
+    const cfg = readSettings();
+    state.channels = channelsFor(cfg.mode).map(function (m) {
+      return {
+        mode: m,
+        seq: generate(m, cfg.n, Math.random, cfg.rule, cfg.scorable),
+        pressed: false,
+        stats: { hit: 0, miss: 0, fa: 0, cr: 0 }
+      };
+    });
+    state.total = blockLength(cfg.n, cfg.scorable);
     state.t = 0;
-    state.stats = { hit: 0, miss: 0, fa: 0, cr: 0 };
     state.running = true;
+    state.paused = false;
+    state.evaluated = false;
+    state.fbMs = cfg.feedback ? Math.min(700, Math.round(cfg.speed * 0.3)) : 0;
+    if (cfg.sound && cfg.feedback) initAudio();
+    buildPlayUI();
     showScreen('Play');
     runTrial();
   }
 
+  function buildPlayUI() {
+    const cfg = state.cfg, n = state.channels.length;
+    $('stage').className = 'stage' + (n > 1 ? ' multi' : '');
+    $('stageBoard').hidden = !chOf('sp');
+    $('stageNum').hidden = !chOf('num');
+    $('stageRot').hidden = !chOf('rot');
+    $('side').hidden = !(chOf('num') || chOf('rot'));
+    $('btnPause').textContent = '일시정지';
+
+    const row = $('matchRow');
+    row.innerHTML = '';
+    row.className = 'matchrow cols' + n;
+    state.btns = [];
+    state.channels.forEach(function (ch, i) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'match';
+      b.setAttribute('aria-pressed', 'false');
+      b.innerHTML = '<span class="lbl"></span><span class="kbd"></span>';
+      b.querySelector('.kbd').textContent = KEYSHOW[n][i];
+      b.addEventListener('pointerdown', function (e) { e.preventDefault(); press(i); });
+      b.addEventListener('click', function () { press(i); });
+      row.appendChild(b);
+      state.btns.push(b);
+    });
+
+    if (n === 1) $('keysHint').textContent = 'Space · Enter · J';
+    else $('keysHint').textContent = state.channels.map(function (ch, i) { return KEYSHOW[n][i] + ' ' + LABEL[ch.mode]; }).join(' · ');
+    void cfg;
+  }
+
   function runTrial() {
-    state.pressed = false;
+    const cfg = state.cfg;
+    state.channels.forEach(function (ch) { ch.pressed = false; });
     state.locked = false;
+    state.evaluated = false;
     $('feedback').textContent = '';
     $('feedback').className = 'feedback';
-    $('stage').className = 'stage';
+    $('stage').classList.remove('ok');
+    $('stage').classList.remove('bad');
     paintStimulus();
     paintStatus();
-    paintButton();
+    paintButtons();
     restartBar();
     clearTimeout(state.timer);
-    state.timer = setTimeout(evaluate, state.speed - FEEDBACK_MS);
+    state.timer = setTimeout(evaluate, cfg.speed - state.fbMs);
+  }
+
+  function describeError(ch, kind) {
+    const t = state.t, n = state.cfg.n;
+    const cur = fmtRel(ch.mode, relKey(ch.mode, ch.seq, t));
+    const ref = fmtRel(ch.mode, relKey(ch.mode, ch.seq, t - n));
+    const prefix = state.channels.length > 1 ? LABEL[ch.mode] + ' ' : '';
+    return prefix + (kind === 'miss' ? '놓침' : '오답') + ' (지금 ' + cur + ', ' + n + '번 전 ' + ref + ')';
   }
 
   function evaluate() {
     state.locked = true;
-    const t = state.t, n = state.n, mode = state.mode, seq = state.seq;
+    state.evaluated = true;
+    const t = state.t, cfg = state.cfg, n = cfg.n;
     if (t >= n + 1) {
-      const target = isTarget(mode, seq, t, n);
-      const said = state.pressed;
-      let kind;
-      if (target && said) kind = 'hit';
-      else if (target && !said) kind = 'miss';
-      else if (!target && said) kind = 'fa';
-      else kind = 'cr';
-      state.stats[kind]++;
-      const ok = (kind === 'hit' || kind === 'cr');
-      const cur = fmtRel(mode, relKey(mode, seq, t));
-      const ref = fmtRel(mode, relKey(mode, seq, t - n));
-      let msg = '정답';
-      if (kind === 'miss') msg = '놓침: 변화 ' + cur + '는 ' + n + '번 전과 같았어요';
-      if (kind === 'fa') msg = '오답: 변화 ' + cur + ', ' + n + '번 전은 ' + ref;
-      $('feedback').textContent = msg;
-      $('feedback').className = 'feedback ' + (ok ? 'ok' : 'bad');
-      $('stage').className = 'stage ' + (ok ? 'ok' : 'bad');
+      const bad = [];
+      state.channels.forEach(function (ch) {
+        const target = isTarget(ch.mode, ch.seq, t, n, cfg.rule);
+        const kind = target ? (ch.pressed ? 'hit' : 'miss') : (ch.pressed ? 'fa' : 'cr');
+        ch.stats[kind]++;
+        if (kind === 'miss' || kind === 'fa') bad.push(describeError(ch, kind));
+      });
+      if (cfg.feedback) {
+        const ok = bad.length === 0;
+        $('feedback').textContent = ok ? '정답' : bad.join(' · ');
+        $('feedback').className = 'feedback ' + (ok ? 'ok' : 'bad');
+        $('stage').classList.add(ok ? 'ok' : 'bad');
+        if (cfg.sound) {
+          if (ok) beep(880, 0.08);
+          else { beep(220, 0.18); buzz(); }
+        }
+      }
     }
-    paintButton();
-    state.timer = setTimeout(nextTrial, FEEDBACK_MS);
+    paintButtons();
+    state.timer = setTimeout(nextTrial, state.fbMs);
   }
 
   function nextTrial() {
     state.t++;
-    if (state.t >= state.seq.length) finishBlock();
+    if (state.t >= state.total) finishBlock();
     else runTrial();
   }
 
-  function press() {
-    if (!state.running || state.locked || state.t < state.n + 1) return;
-    state.pressed = true;
-    paintButton();
+  function press(i) {
+    if (!state.running || state.paused || state.locked || state.t < state.cfg.n + 1) return;
+    const ch = state.channels[i];
+    if (!ch) return;
+    ch.pressed = true;
+    paintButtons();
+  }
+
+  function pause() {
+    if (!state.running || state.paused) return;
+    state.paused = true;
+    clearTimeout(state.timer);
+    $('stage').classList.add('paused');
+    $('barFill').style.animationPlayState = 'paused';
+    $('feedback').textContent = '일시정지 중입니다. 「계속」을 누르면 이 시도를 처음부터 다시 보여줍니다.';
+    $('feedback').className = 'feedback';
+    $('btnPause').textContent = '계속';
+  }
+  function resume() {
+    if (!state.paused) return;
+    state.paused = false;
+    $('stage').classList.remove('paused');
+    $('btnPause').textContent = '일시정지';
+    // A trial that was already judged is not replayed, so no answer is counted twice.
+    if (state.evaluated) nextTrial();
+    else runTrial();
   }
 
   function quit() {
     clearTimeout(state.timer);
     state.running = false;
-    renderHistory();
+    state.paused = false;
+    $('stage').classList.remove('paused');
+    renderRecords();
     showScreen('Start');
+  }
+
+  function statCard(label, val) {
+    const d = document.createElement('div');
+    const dt = document.createElement('dt');
+    dt.textContent = label;
+    const dd = document.createElement('dd');
+    dd.textContent = val;
+    d.appendChild(dt);
+    d.appendChild(dd);
+    return d;
   }
 
   function finishBlock() {
     clearTimeout(state.timer);
     state.running = false;
-    const s = state.stats;
-    const acc = (s.hit + s.cr) / SCORABLE;
-    store.history.unshift({ ts: Date.now(), mode: state.mode, n: state.n, acc: acc, hit: s.hit, miss: s.miss, fa: s.fa, cr: s.cr });
-    store.history = store.history.slice(0, 20);
+    const cfg = state.cfg, chs = state.channels;
+    let correct = 0;
+    let dpSum = 0;
+    chs.forEach(function (ch) {
+      correct += ch.stats.hit + ch.stats.cr;
+      ch.dp = dPrime(ch.stats);
+      dpSum += ch.dp;
+    });
+    const judged = cfg.scorable * chs.length;
+    const acc = correct / judged;
+    const dp = dpSum / chs.length;
+
+    store.history.unshift({ ts: Date.now(), mode: cfg.mode, rule: cfg.rule, n: cfg.n, acc: acc, dp: dp, speed: cfg.speed, S: cfg.scorable });
+    store.history = store.history.slice(0, 60);
     saveStore();
 
-    state.nextN = nextLevel(state.n, acc);
+    state.nextN = nextLevel(cfg.n, acc);
     $('resAcc').textContent = Math.round(acc * 100) + '%';
-    $('resSub').textContent = modeName(state.mode) + ' · N=' + state.n + ' · ' + SCORABLE + '회 중 ' + (s.hit + s.cr) + '회 정답';
-    $('stHit').textContent = s.hit;
-    $('stMiss').textContent = s.miss;
-    $('stFa').textContent = s.fa;
-    $('stCr').textContent = s.cr;
+    $('resSub').textContent = MODE_NAMES[cfg.mode] + ' · ' + ruleName(cfg.rule) + ' · N=' + cfg.n + ' · ' + judged + '회 중 ' + correct + '회 정답 · d′ ' + dp.toFixed(1);
+
+    const body = $('resBody');
+    body.innerHTML = '';
+    chs.forEach(function (ch) {
+      const block = document.createElement('div');
+      block.className = 'chblock';
+      if (chs.length > 1) {
+        const title = document.createElement('p');
+        title.className = 'chtitle';
+        const cAcc = Math.round((ch.stats.hit + ch.stats.cr) / cfg.scorable * 100);
+        title.textContent = LABEL[ch.mode] + ' · 정확도 ' + cAcc + '% · d′ ' + ch.dp.toFixed(1);
+        block.appendChild(title);
+      }
+      const dl = document.createElement('dl');
+      dl.className = 'stats';
+      dl.appendChild(statCard('맞게 누름', ch.stats.hit));
+      dl.appendChild(statCard('놓침', ch.stats.miss));
+      dl.appendChild(statCard('잘못 누름', ch.stats.fa));
+      dl.appendChild(statCard('맞게 거름', ch.stats.cr));
+      block.appendChild(dl);
+      body.appendChild(block);
+    });
 
     let advice, nextLabel;
-    if (state.nextN > state.n) { advice = '정확도가 85% 이상이어서 다음 블록은 N=' + state.nextN + '로 올립니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
-    else if (state.nextN < state.n) { advice = '정확도가 60% 미만이어서 다음 블록은 N=' + state.nextN + '로 낮춥니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
-    else if (acc >= 0.85) { advice = '최고 레벨(N=' + MAX_N + ')에서도 정확도가 높습니다. 속도를 줄이거나 직전 자극 표시를 꺼 보세요.'; nextLabel = 'N=' + state.n + '로 한 번 더'; }
-    else { advice = '60~85% 구간이므로 같은 레벨에서 한 번 더 해 봅니다.'; nextLabel = 'N=' + state.n + '로 한 번 더'; }
+    if (state.nextN > cfg.n) { advice = '정확도가 85% 이상이어서 다음 블록은 N=' + state.nextN + '로 올립니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
+    else if (state.nextN < cfg.n) { advice = '정확도가 60% 미만이어서 다음 블록은 N=' + state.nextN + '로 낮춥니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
+    else if (acc >= 0.85) { advice = '최고 레벨(N=' + MAX_N + ')에서도 정확도가 높습니다. 속도를 줄이거나 직전 자극 표시를 끄거나 모드를 올려 보세요.'; nextLabel = 'N=' + cfg.n + '로 한 번 더'; }
+    else { advice = '60~85% 구간이므로 같은 레벨에서 한 번 더 해 봅니다.'; nextLabel = 'N=' + cfg.n + '로 한 번 더'; }
     $('resAdvice').textContent = advice;
     $('btnNext').textContent = nextLabel;
     showScreen('Result');
@@ -553,31 +952,37 @@ function fmtRel(mode, key) {
 
   /* ---------- painting ---------- */
   function paintStatus() {
-    const t = state.t, n = state.n;
-    $('stN').textContent = 'N=' + n;
-    $('stProg').textContent = (t + 1) + ' / ' + state.seq.length;
+    const t = state.t, n = state.cfg.n;
+    $('stN').textContent = 'N=' + n + (state.cfg.rule === 'opp' ? ' 반대' : '');
+    $('stProg').textContent = (t + 1) + ' / ' + state.total;
     $('stPhase').textContent = t >= n + 1 ? '판단' : '기억 단계';
   }
 
-  function paintButton() {
-    const b = $('btnMatch');
-    const memory = state.t < state.n + 1;
-    if (memory) {
-      b.setAttribute('aria-disabled', 'true');
-      b.setAttribute('aria-pressed', 'false');
-      b.textContent = '변화를 기억하세요';
-    } else {
-      b.setAttribute('aria-disabled', 'false');
-      b.setAttribute('aria-pressed', state.pressed ? 'true' : 'false');
-      b.textContent = state.pressed ? '같음 선택됨' : '같음';
-    }
+  function paintButtons() {
+    const memory = state.t < state.cfg.n + 1;
+    const word = state.cfg.rule === 'opp' ? '반대' : '같음';
+    const multi = state.channels.length > 1;
+    state.btns.forEach(function (b, i) {
+      const ch = state.channels[i];
+      const lbl = b.querySelector('.lbl');
+      if (memory) {
+        b.setAttribute('aria-disabled', 'true');
+        b.setAttribute('aria-pressed', 'false');
+        lbl.textContent = multi ? '기억 중' : '변화를 기억하세요';
+      } else {
+        b.setAttribute('aria-disabled', 'false');
+        b.setAttribute('aria-pressed', ch.pressed ? 'true' : 'false');
+        lbl.textContent = (multi ? LABEL[ch.mode] + ' ' : '') + word + (!multi && ch.pressed ? ' 선택됨' : '');
+      }
+    });
   }
 
   function restartBar() {
     const bar = $('barFill');
     bar.classList.remove('run');
     void bar.offsetWidth;
-    bar.style.setProperty('--dur', state.speed + 'ms');
+    bar.style.animationPlayState = 'running';
+    bar.style.setProperty('--dur', state.cfg.speed + 'ms');
     bar.classList.add('run');
   }
 
@@ -593,62 +998,77 @@ function fmtRel(mode, key) {
   }
 
   function paintStimulus() {
-    const t = state.t, seq = state.seq;
-    const withPrev = state.showPrev && t >= 1;
-    if (state.mode === 'num') {
-      $('stageNum').hidden = false;
-      $('stageBoard').hidden = true;
-      $('curNum').textContent = seq[t];
-      $('prevNum').textContent = withPrev ? seq[t - 1] : '';
-      $('prevNum').hidden = !withPrev;
-      $('arrow').hidden = !withPrev;
-      $('stageNum').setAttribute('aria-label', withPrev ? '직전 ' + seq[t - 1] + ', 현재 ' + seq[t] : '현재 ' + seq[t]);
-    } else {
-      $('stageNum').hidden = true;
-      $('stageBoard').hidden = false;
+    const t = state.t;
+    const withPrev = state.cfg.showPrev && t >= 1;
+    const cn = chOf('num'), cs = chOf('sp'), cr = chOf('rot');
+
+    if (cn) {
+      const prev = withPrev ? cn.seq[t - 1] : null;
+      $('curNum').textContent = cn.seq[t];
+      $('prevNum').textContent = prev === null ? '' : prev;
+      $('prevNum').hidden = prev === null;
+      $('numArrow').hidden = prev === null;
+      $('stageNum').setAttribute('aria-label', prev === null ? '숫자 현재 ' + cn.seq[t] : '숫자 직전 ' + prev + ', 현재 ' + cn.seq[t]);
+    }
+    if (cs) {
       buildBoard();
       const cells = $('stageBoard').children;
       for (let i = 0; i < cells.length; i++) cells[i].innerHTML = '';
-      const cur = seq[t];
-      const curEl = document.createElement('div');
-      curEl.className = 'dot';
-      cells[cur.y * GRID + cur.x].appendChild(curEl);
+      const cur = cs.seq[t];
+      const dot = document.createElement('div');
+      dot.className = 'dot';
+      cells[cur.y * GRID + cur.x].appendChild(dot);
       if (withPrev) {
-        const p = seq[t - 1];
-        const ringEl = document.createElement('div');
-        ringEl.className = 'ring';
-        cells[p.y * GRID + p.x].appendChild(ringEl);
+        const p = cs.seq[t - 1];
+        const ring = document.createElement('div');
+        ring.className = 'ring';
+        cells[p.y * GRID + p.x].appendChild(ring);
       }
       $('stageBoard').setAttribute('aria-label', '현재 위치 ' + (cur.y + 1) + '행 ' + (cur.x + 1) + '열');
+    }
+    if (cr) {
+      const step = 360 / ROT_STEPS;
+      $('curRotP').setAttribute('transform', 'rotate(' + (cr.seq[t] * step) + ')');
+      $('prevRotBox').hidden = !withPrev;
+      $('rotArrow').hidden = !withPrev;
+      if (withPrev) $('prevRotP').setAttribute('transform', 'rotate(' + (cr.seq[t - 1] * step) + ')');
+      $('stageRot').setAttribute('aria-label', '화살표 현재 ' + (cr.seq[t] * step) + '도');
     }
   }
 
   /* ---------- events ---------- */
   $('btnStart').addEventListener('click', startBlock);
   $('btnQuit').addEventListener('click', quit);
-  $('btnHome').addEventListener('click', function () { renderHistory(); showScreen('Start'); });
+  $('btnPause').addEventListener('click', function () { if (state.paused) resume(); else pause(); });
+  $('btnReset').addEventListener('click', onReset);
+  $('btnHome').addEventListener('click', function () { renderRecords(); showScreen('Start'); });
   $('btnNext').addEventListener('click', function () {
     setRadio('n', state.nextN);
     startBlock();
   });
-  $('btnMatch').addEventListener('pointerdown', function (e) { e.preventDefault(); press(); });
-  $('btnMatch').addEventListener('click', press);
   document.addEventListener('keydown', function (e) {
-    if (!state.running) return;
+    if (!state.running || state.paused) return;
     const k = e.key ? e.key.toLowerCase() : '';
-    if (e.code === 'Space' || k === 'enter' || k === 'j') {
+    const n = state.channels.length;
+    let idx = -1;
+    if (n === 1) {
+      if (e.code === 'Space' || k === 'enter' || k === 'j' || k === 'f' || k === '1') idx = 0;
+    } else {
+      idx = KEYMAP[n].indexOf(k);
+      if (idx < 0 && k.length === 1 && k >= '1' && k <= String(n)) idx = Number(k) - 1;
+    }
+    if (idx >= 0) {
       e.preventDefault();
-      press();
+      press(idx);
     }
   });
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden && state.running) quit();
+    if (document.hidden && state.running) pause();
   });
-  $('settings').addEventListener('change', function () { updateEstimate(); });
+  $('settings').addEventListener('change', updateDescriptions);
 
   applySaved();
-  updateEstimate();
-  renderHistory();
+  updateDescriptions();
 })();
 </script>
 <script src="sw-register.js"></script>
