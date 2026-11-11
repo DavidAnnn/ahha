@@ -199,7 +199,40 @@ button { font: inherit; color: inherit; }
 .stats dd { margin: 0; font-family: var(--font-mono); font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .advice { color: var(--ink); }
 
-@media (prefers-reduced-motion: reduce) { .btn, .match { transition: none; } }
+/* Daily session card */
+.today { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.today-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.today-est { font-size: 13px; color: var(--muted); }
+.today-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.today-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.today-list li:first-child { border-top: 0; }
+.today-list li span:first-child { min-width: 0; }
+.today-list li span:last-child { font-family: var(--font-mono); color: var(--muted); white-space: nowrap; }
+.goal { display: flex; flex-direction: column; gap: 6px; }
+.goal-bar { height: 6px; border-radius: 3px; background: var(--soft); overflow: hidden; }
+.goal-bar i { display: block; height: 100%; width: 0; background: var(--good); }
+
+/* Breathing */
+.breath { display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 36px 0 12px; text-align: center; }
+.breath-circle { width: 140px; height: 140px; border-radius: 50%; background: var(--soft); border: 2px solid var(--accent); animation: breathe 10s ease-in-out infinite; }
+@keyframes breathe { 0% { transform: scale(1); } 40% { transform: scale(1.45); } 100% { transform: scale(1); } }
+.breath-text { font-size: 22px; font-weight: 700; }
+
+/* Puzzle */
+.pzgrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; width: min(100%, 300px); margin: 0 auto; }
+.pzopts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(100%, 360px); margin: 0 auto; }
+.pzcell, .pzopt { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; color: var(--ink); aspect-ratio: 1; padding: 4px; display: block; width: 100%; }
+.pzcell svg, .pzopt svg { display: block; width: 100%; height: 100%; }
+.pzcell.q { border-style: dashed; color: var(--muted); }
+.pzopt { cursor: pointer; font: inherit; }
+.pzopt:disabled { color: var(--ink); cursor: default; }
+.pzopt:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.pzopt.right { border: 2px solid var(--good); }
+.pzopt.wrong { border: 2px solid var(--bad); }
+.pzexplain { font-size: 14px; min-height: 1.6em; }
+.pzlist { display: flex; flex-direction: column; gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) { .btn, .match { transition: none; } .breath-circle { animation: none; } }
 </style>
 
 </head>
@@ -213,11 +246,33 @@ button { font: inherit; color: inherit; }
     </div>
     <p class="lede">숫자나 위치 자체가 아니라, 직전 자극에서 지금 자극으로 바뀐 변화를 기억하고 N번 전의 변화와 비교합니다.</p>
 
+    <div class="today" id="today">
+      <div class="today-head">
+        <p class="eyebrow">오늘의 세션</p>
+        <p class="today-est" id="todayEst"></p>
+      </div>
+      <ol class="today-list" id="todayList"></ol>
+      <div class="goal">
+        <div class="goal-bar"><i id="goalFill"></i></div>
+        <p class="hint" id="goalText"></p>
+      </div>
+      <label class="check" for="optBreath">
+        <input type="checkbox" id="optBreath" checked>
+        <span>시작 전 호흡 30초<small>천천히 내쉬는 호흡이 긴장을 낮출 수는 있지만, 작업기억 수행을 높인다는 근거는 약합니다. 원하지 않으면 끄세요.</small></span>
+      </label>
+      <div class="actions">
+        <button type="button" class="btn primary" id="btnSession">세션 시작</button>
+        <button type="button" class="btn" id="btnPuzzle">관계 퍼즐만 하기</button>
+      </div>
+      <p class="hint">한 가지 모드만 몰아서 하면 그 과제의 요령만 늘기 쉬워서, 오래 안 한 모드부터 번갈아 하도록 구성했습니다. 마지막에는 규칙을 설명해 주는 관계 퍼즐이 들어갑니다.</p>
+    </div>
+
     <div class="example" role="group" aria-label="N=2 예시">
       <div class="example-row" id="exRow"></div>
       <p class="example-cap" id="exCap"></p>
     </div>
 
+    <p class="eyebrow">직접 설정</p>
     <form id="settings" onsubmit="return false">
       <fieldset>
         <legend>모드</legend>
@@ -274,6 +329,10 @@ button { font: inherit; color: inherit; }
         <label class="check" for="optFeedback">
           <input type="checkbox" id="optFeedback" checked>
           <span>시도마다 정답 피드백 보기<small>끄면 틀린 것도 바로 알 수 없어서 더 어렵습니다. 소리와 진동도 함께 꺼집니다.</small></span>
+        </label>
+        <label class="check" for="optAuto">
+          <input type="checkbox" id="optAuto" checked>
+          <span>모드별 레벨 자동 선택<small>모드와 규칙을 바꾸면, 그 조합의 지난 결과로 정해진 N을 자동으로 고릅니다.</small></span>
         </label>
         <label class="check" for="optSound">
           <input type="checkbox" id="optSound">
@@ -334,12 +393,37 @@ button { font: inherit; color: inherit; }
       <p class="lede" id="resSub"></p>
     </div>
     <div id="resBody"></div>
-    <p class="hint">d′는 「같음」인 시도와 아닌 시도를 구별하는 민감도입니다. 0이면 찍기 수준이고 2 이상이면 잘 구별하는 편입니다.</p>
+    <p class="hint" id="resHint">d′는 「같음」인 시도와 아닌 시도를 구별하는 민감도입니다. 0이면 찍기 수준이고 2 이상이면 잘 구별하는 편입니다. 반응 경향에서 신중형은 놓침이 많은 쪽, 적극형은 잘못 누름이 많은 쪽입니다.</p>
     <p class="advice" id="resAdvice"></p>
+    <p class="hint" id="sessProg" hidden></p>
     <div class="actions">
       <button type="button" class="btn primary" id="btnNext">다음 블록</button>
       <button type="button" class="btn" id="btnHome">설정으로</button>
     </div>
+  </section>
+
+  <section id="screenBreath" hidden>
+    <div class="breath">
+      <p class="eyebrow">준비 호흡</p>
+      <div class="breath-circle" id="breathCircle" aria-hidden="true"></div>
+      <p class="breath-text" id="breathText" aria-live="polite">들이쉬세요</p>
+      <p class="hint" id="breathCount">30초</p>
+      <p class="hint">코로 4초 들이쉬고, 6초에 걸쳐 천천히 내쉽니다.</p>
+    </div>
+    <button type="button" class="btn" id="btnBreathSkip">건너뛰기</button>
+  </section>
+
+  <section id="screenPuzzle" hidden>
+    <div class="status">
+      <div><b id="pzProg">문제 1 / 6</b></div>
+      <button type="button" class="link" id="btnPzQuit">중단</button>
+    </div>
+    <p class="hint" id="pzPrompt"></p>
+    <div class="pzgrid" id="pzGrid" role="group" aria-label="3×3 규칙 퍼즐"></div>
+    <div class="pzopts" id="pzOpts" role="group" aria-label="보기"></div>
+    <p class="feedback" id="pzFb" aria-live="polite"></p>
+    <p class="pzexplain" id="pzExplain"></p>
+    <button type="button" class="btn primary" id="btnPzNext" hidden>다음 문제</button>
   </section>
 
 </main>
@@ -520,6 +604,229 @@ function bestN(history, mode, rule) {
   });
   return best;
 }
+function shuffled(rng, arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = randInt(rng, i + 1);
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+function median(a) {
+  if (!a.length) return null;
+  const s = a.slice().sort(function (x, y) { return x - y; });
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+// Response criterion c: positive is a cautious style (more misses), negative a liberal style (more false alarms).
+function criterionC(st) {
+  const targets = st.hit + st.miss, others = st.fa + st.cr;
+  return -(probit((st.hit + 0.5) / (targets + 1)) + probit((st.fa + 0.5) / (others + 1))) / 2;
+}
+function styleLabel(c) { return c > 0.35 ? '신중형' : (c < -0.35 ? '적극형' : '균형형'); }
+function levelOf(levels, mode, rule) {
+  return Math.max(1, Math.min(MAX_N, Number((levels || {})[mode + '/' + rule]) || 1));
+}
+function todaySec(history, today) {
+  let s = 0;
+  history.forEach(function (r) { if (dayNum(r.ts) === today) s += Number(r.sec) || 0; });
+  return s;
+}
+
+/* ---------- relational puzzles (3x3 matrix reasoning) ---------- */
+const PZ_MAX = 5;
+const PZ_ATTR = {
+  num: { min: 1, max: 9, mod: false, label: '숫자' },
+  rot: { min: 0, max: 7, mod: true, label: '화살표 방향' },
+  size: { min: 1, max: 3, mod: false, label: '원 크기' }
+};
+const PZ_ORDER = ['num', 'rot', 'size'];
+const PZ_KINDS = { 1: ['across', 'down'], 2: ['both', 'sum'], 3: ['across', 'down', 'both'], 4: ['both', 'sum', 'latin'], 5: ['across', 'down', 'both', 'sum', 'latin'] };
+
+function pzDomain(a) {
+  const d = [];
+  for (let v = PZ_ATTR[a].min; v <= PZ_ATTR[a].max; v++) d.push(v);
+  return d;
+}
+// Wraps for circular attributes (rotation); returns null when a non-circular value leaves its range.
+function pzNorm(a, v) {
+  const d = PZ_ATTR[a], M = d.max - d.min + 1;
+  if (d.mod) return ((v - d.min) % M + M) % M + d.min;
+  return (v >= d.min && v <= d.max) ? v : null;
+}
+// Every value that some consistent rule would put in the missing cell (row 3, column 3).
+function pzPredict(a, g) {
+  const dom = pzDomain(a), d = PZ_ATTR[a];
+  const steps = d.mod ? dom : [-4, -3, -2, -1, 0, 1, 2, 3, 4];
+  const out = {};
+  dom.forEach(function (base) {
+    steps.forEach(function (p) {
+      steps.forEach(function (q) {
+        let ok = true;
+        for (let r = 0; r < 3 && ok; r++) {
+          for (let c = 0; c < 3; c++) {
+            if (r === 2 && c === 2) continue;
+            if (pzNorm(a, base + r * p + c * q) !== g[r][c]) { ok = false; break; }
+          }
+        }
+        if (ok) {
+          const v = pzNorm(a, base + 2 * p + 2 * q);
+          if (v !== null) out[v] = true;
+        }
+      });
+    });
+  });
+  const add = function (x, y) { return pzNorm(a, x + y); };
+  if (add(g[0][0], g[0][1]) === g[0][2] && add(g[1][0], g[1][1]) === g[1][2]) {
+    const v = add(g[2][0], g[2][1]);
+    if (v !== null) out[v] = true;
+  }
+  const S = [g[0][0], g[0][1], g[0][2]];
+  if (S[0] !== S[1] && S[0] !== S[2] && S[1] !== S[2]) {
+    let ok = true;
+    for (let r = 0; r < 3; r++) {
+      const rowKnown = [], colKnown = [];
+      for (let c = 0; c < 3; c++) {
+        if (!(r === 2 && c === 2)) rowKnown.push(g[r][c]);
+        if (!(c === 2 && r === 2)) colKnown.push(g[c][r]);
+      }
+      [rowKnown, colKnown].forEach(function (cells) {
+        cells.forEach(function (x, i) {
+          if (S.indexOf(x) < 0 || cells.indexOf(x) !== i) ok = false;
+        });
+      });
+    }
+    if (ok) {
+      const rowLeft = S.filter(function (x) { return x !== g[2][0] && x !== g[2][1]; });
+      const colLeft = S.filter(function (x) { return x !== g[0][2] && x !== g[1][2]; });
+      if (rowLeft.length === 1 && colLeft.length === 1 && rowLeft[0] === colLeft[0]) out[rowLeft[0]] = true;
+    }
+  }
+  return Object.keys(out).map(Number).sort(function (x, y) { return x - y; });
+}
+function pzGenAttr(a, kind, rng) {
+  const dom = pzDomain(a);
+  const maxS = a === 'size' ? 1 : 3;
+  const rs = function () { const s = 1 + randInt(rng, maxS); return rng() < 0.5 ? s : -s; };
+  const g = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  const info = { name: a, kind: kind, g: g, p: 0, q: 0, base: 0 };
+  if (kind === 'across' || kind === 'down' || kind === 'both') {
+    info.p = kind === 'across' ? 0 : rs();
+    info.q = kind === 'down' ? 0 : rs();
+    info.base = pick(rng, dom);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const v = pzNorm(a, info.base + r * info.p + c * info.q);
+        if (v === null) return null;
+        g[r][c] = v;
+      }
+    }
+  } else if (kind === 'sum') {
+    if (a === 'size') return null;
+    for (let r = 0; r < 3; r++) {
+      const x = pick(rng, dom), y = pick(rng, dom), z = pzNorm(a, x + y);
+      if (z === null) return null;
+      g[r][0] = x; g[r][1] = y; g[r][2] = z;
+    }
+  } else {
+    const S = shuffled(rng, dom).slice(0, 3);
+    const shift = rng() < 0.5 ? 1 : 2;
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) g[r][c] = S[(r * shift + c) % 3];
+  }
+  const pred = pzPredict(a, g);
+  if (pred.length !== 1 || pred[0] !== g[2][2]) return null;
+  return info;
+}
+function pzStepText(name, s) {
+  const sign = s > 0 ? '+' : '−';
+  if (name === 'rot') return sign + Math.abs(s) * 45 + '°';
+  if (name === 'size') return sign + Math.abs(s) + '단계';
+  return sign + Math.abs(s);
+}
+function pzDescribe(a) {
+  const label = PZ_ATTR[a.name].label;
+  const st = function (s) { return pzStepText(a.name, s); };
+  if (a.kind === 'across') return label + ': 가로로 한 칸 갈 때마다 ' + st(a.q);
+  if (a.kind === 'down') return label + ': 세로로 한 칸 내려갈 때마다 ' + st(a.p);
+  if (a.kind === 'both') return label + ': 가로로 한 칸마다 ' + st(a.q) + ', 세로로 한 칸마다 ' + st(a.p);
+  if (a.kind === 'sum') return label + ': 각 줄에서 첫째 칸과 둘째 칸을 더하면 셋째 칸' + (a.name === 'rot' ? ' (각도를 더함)' : '');
+  return label + ': 각 줄과 각 열에 같은 세 가지 값이 한 번씩 나옴';
+}
+function pzGenerate(level, rng) {
+  rng = rng || Math.random;
+  level = Math.max(1, Math.min(PZ_MAX, Math.round(level) || 1));
+  const nAttr = level <= 2 ? 1 : (level <= 4 ? 2 : 3);
+  const pool = level <= 2 ? ['num', 'rot'] : ['num', 'rot', 'size'];
+  for (let tries = 0; tries < 3000; tries++) {
+    const names = shuffled(rng, pool).slice(0, nAttr).sort(function (a, b) { return PZ_ORDER.indexOf(a) - PZ_ORDER.indexOf(b); });
+    const attrs = [];
+    for (let i = 0; i < names.length; i++) {
+      const a = pzGenAttr(names[i], pick(rng, PZ_KINDS[level]), rng);
+      if (!a) break;
+      attrs.push(a);
+    }
+    if (attrs.length !== names.length) continue;
+    const cells = [];
+    for (let r = 0; r < 3; r++) {
+      const row = [];
+      for (let c = 0; c < 3; c++) {
+        const t = {};
+        attrs.forEach(function (a) { t[a.name] = a.g[r][c]; });
+        row.push(t);
+      }
+      cells.push(row);
+    }
+    const answer = cells[2][2];
+    const key = function (t) { return names.map(function (n) { return t[n]; }).join(','); };
+    const seen = {};
+    seen[key(answer)] = true;
+    const singles = [];
+    names.forEach(function (n) {
+      pzDomain(n).forEach(function (v) {
+        if (v !== answer[n]) { const t = Object.assign({}, answer); t[n] = v; singles.push(t); }
+      });
+    });
+    const opts = [];
+    shuffled(rng, singles).forEach(function (t) {
+      if (opts.length < 5 && !seen[key(t)]) { seen[key(t)] = true; opts.push(t); }
+    });
+    for (let k = 0; k < 200 && opts.length < 5; k++) {
+      const t = {};
+      names.forEach(function (n) { t[n] = pick(rng, pzDomain(n)); });
+      if (!seen[key(t)]) { seen[key(t)] = true; opts.push(t); }
+    }
+    if (opts.length < 5) continue;
+    const options = shuffled(rng, opts.concat([answer]));
+    let correct = -1;
+    options.forEach(function (t, i) { if (key(t) === key(answer)) correct = i; });
+    return { level: level, names: names, attrs: attrs, cells: cells, answer: answer, options: options, correct: correct, explain: attrs.map(pzDescribe).join(' / ') };
+  }
+  throw new Error('puzzle generation failed at level ' + level);
+}
+
+/* ---------- daily session planner ---------- */
+// Three n-back blocks on different modes, least recently practiced first, then one puzzle set.
+function planSession(history, levels, pzLevel) {
+  levels = levels || {};
+  const cands = ['num', 'sp', 'rot'];
+  if (levelOf(levels, 'num', 'same') >= 2 && levelOf(levels, 'sp', 'same') >= 2) cands.push('dual');
+  if (cands.indexOf('dual') >= 0 && levelOf(levels, 'dual', 'same') >= 2 && levelOf(levels, 'rot', 'same') >= 2) cands.push('triple');
+  const last = {}, count = {};
+  history.forEach(function (r) {
+    if (r.mode === 'pz') return;
+    last[r.mode] = Math.max(last[r.mode] || 0, r.ts);
+    count[r.mode] = (count[r.mode] || 0) + 1;
+  });
+  const picked = cands.map(function (m, i) { return { m: m, t: last[m] || 0, i: i }; })
+    .sort(function (a, b) { return a.t - b.t || a.i - b.i; })
+    .slice(0, 3);
+  const items = picked.map(function (o) {
+    const rule = (bestN(history, o.m, 'same') >= 3 && (count[o.m] || 0) % 2 === 1) ? 'opp' : 'same';
+    return { type: 'nback', mode: o.m, rule: rule, n: levelOf(levels, o.m, rule) };
+  });
+  items.push({ type: 'puzzle', level: Math.max(1, Math.min(PZ_MAX, Math.round(pzLevel) || 1)) });
+  return items;
+}
 /*LOGIC_END*/
 
 (function () {
@@ -528,7 +835,9 @@ function bestN(history, mode, rule) {
   const LABEL = { num: '숫자', sp: '위치', rot: '회전' };
   const KEYMAP = { 2: ['f', 'j'], 3: ['f', 'g', 'j'] };
   const KEYSHOW = { 1: ['Space'], 2: ['F', 'J'], 3: ['F', 'G', 'J'] };
-  const MODE_NAMES = { num: '숫자 변화량', sp: '공간 이동', rot: '도형 회전', dual: '듀얼(숫자+위치)', triple: '트리플(숫자+위치+회전)' };
+  const MODE_NAMES = { num: '숫자 변화량', sp: '공간 이동', rot: '도형 회전', dual: '듀얼(숫자+위치)', triple: '트리플(숫자+위치+회전)', pz: '관계 퍼즐' };
+  const GOAL_MIN = 10;
+  const PZ_COUNT = 6;
   const MODE_DESC = {
     num: '숫자가 바뀐 양을 기억합니다. 예를 들어 2에서 5로 바뀌면 +3입니다.',
     sp: '점이 이동한 방향과 거리를 기억합니다. 오른쪽 아래로 한 칸 이동하면 (+1, +1)입니다.',
@@ -550,10 +859,13 @@ function bestN(history, mode, rule) {
   const store = loadStore();
   store.settings = store.settings || {};
   store.history = Array.isArray(store.history) ? store.history : [];
+  store.levels = (store.levels && typeof store.levels === 'object') ? store.levels : {};
+  store.pz = (store.pz && typeof store.pz === 'object') ? store.pz : { level: 1, sets: 0 };
 
   const state = {
-    cfg: null, channels: [], btns: [], total: 0, t: 0, fbMs: 0,
-    locked: false, evaluated: false, running: false, paused: false, timer: null, nextN: 1
+    cfg: null, channels: [], btns: [], total: 0, t: 0, fbMs: 0, trialStart: 0,
+    locked: false, evaluated: false, running: false, paused: false, timer: null, nextN: 1,
+    session: null, onNext: null, breathLeft: 0, breathTimer: null, pz: null
   };
 
   /* ---------- settings ---------- */
@@ -565,7 +877,7 @@ function bestN(history, mode, rule) {
     const el = document.querySelector('input[name="' + name + '"][value="' + val + '"]');
     if (el) el.checked = true;
   }
-  function readSettings() {
+  function readSettings(noSave) {
     const cfg = {
       mode: getVal('mode') || 'num',
       rule: getVal('rule') || 'same',
@@ -574,11 +886,15 @@ function bestN(history, mode, rule) {
       scorable: Number(getVal('len')) || 20,
       showPrev: $('showPrev').checked,
       feedback: $('optFeedback').checked,
-      sound: $('optSound').checked
+      sound: $('optSound').checked,
+      auto: $('optAuto').checked,
+      breath: $('optBreath').checked
     };
     state.cfg = cfg;
-    store.settings = cfg;
-    saveStore();
+    if (!noSave) {
+      store.settings = cfg;
+      saveStore();
+    }
     return cfg;
   }
   function applySaved() {
@@ -591,9 +907,11 @@ function bestN(history, mode, rule) {
     if (typeof s.showPrev === 'boolean') $('showPrev').checked = s.showPrev;
     if (typeof s.feedback === 'boolean') $('optFeedback').checked = s.feedback;
     if (typeof s.sound === 'boolean') $('optSound').checked = s.sound;
+    if (typeof s.auto === 'boolean') $('optAuto').checked = s.auto;
+    if (typeof s.breath === 'boolean') $('optBreath').checked = s.breath;
   }
   function showScreen(name) {
-    ['Start', 'Play', 'Result'].forEach(function (s) { $('screen' + s).hidden = (s !== name); });
+    ['Start', 'Play', 'Result', 'Breath', 'Puzzle'].forEach(function (s) { $('screen' + s).hidden = (s !== name); });
     window.scrollTo(0, 0);
   }
   function ruleName(r) { return r === 'opp' ? '반대 변화' : '같은 변화'; }
@@ -644,6 +962,7 @@ function bestN(history, mode, rule) {
 
   /* ---------- records ---------- */
   function renderRecords() {
+    renderToday();
     const h = store.history;
     $('records').hidden = h.length === 0;
     if (!h.length) return;
@@ -680,7 +999,7 @@ function bestN(history, mode, rule) {
       const li = document.createElement('li');
       const d = new Date(r.ts);
       const left = document.createElement('span');
-      left.textContent = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' · ' + (MODE_NAMES[r.mode] || r.mode) + ((r.rule || 'same') === 'opp' ? ' · 반대' : '') + ' · N=' + r.n;
+      left.textContent = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' · ' + (MODE_NAMES[r.mode] || r.mode) + ((r.rule || 'same') === 'opp' ? ' · 반대' : '') + (r.mode === 'pz' ? ' · 레벨 ' : ' · N=') + r.n;
       const right = document.createElement('span');
       right.textContent = Math.round(r.acc * 100) + '%';
       li.appendChild(left); li.appendChild(right);
@@ -736,13 +1055,16 @@ function bestN(history, mode, rule) {
     return null;
   }
 
-  function startBlock() {
-    const cfg = readSettings();
+  function startBlock(override) {
+    const cfg = readSettings(!!override);
+    if (override) Object.assign(cfg, override);
     state.channels = channelsFor(cfg.mode).map(function (m) {
       return {
         mode: m,
         seq: generate(m, cfg.n, Math.random, cfg.rule, cfg.scorable),
         pressed: false,
+        pressT: null,
+        rts: [],
         stats: { hit: 0, miss: 0, fa: 0, cr: 0 }
       };
     });
@@ -791,7 +1113,8 @@ function bestN(history, mode, rule) {
 
   function runTrial() {
     const cfg = state.cfg;
-    state.channels.forEach(function (ch) { ch.pressed = false; });
+    state.channels.forEach(function (ch) { ch.pressed = false; ch.pressT = null; });
+    state.trialStart = Date.now();
     state.locked = false;
     state.evaluated = false;
     $('feedback').textContent = '';
@@ -824,6 +1147,7 @@ function bestN(history, mode, rule) {
         const target = isTarget(ch.mode, ch.seq, t, n, cfg.rule);
         const kind = target ? (ch.pressed ? 'hit' : 'miss') : (ch.pressed ? 'fa' : 'cr');
         ch.stats[kind]++;
+        if (kind === 'hit' && ch.pressT !== null) ch.rts.push(ch.pressT);
         if (kind === 'miss' || kind === 'fa') bad.push(describeError(ch, kind));
       });
       if (cfg.feedback) {
@@ -851,6 +1175,7 @@ function bestN(history, mode, rule) {
     if (!state.running || state.paused || state.locked || state.t < state.cfg.n + 1) return;
     const ch = state.channels[i];
     if (!ch) return;
+    if (!ch.pressed) ch.pressT = Date.now() - state.trialStart;
     ch.pressed = true;
     paintButtons();
   }
@@ -877,6 +1202,8 @@ function bestN(history, mode, rule) {
 
   function quit() {
     clearTimeout(state.timer);
+    clearTimeout(state.breathTimer);
+    state.session = null;
     state.running = false;
     state.paused = false;
     $('stage').classList.remove('paused');
@@ -900,21 +1227,30 @@ function bestN(history, mode, rule) {
     state.running = false;
     const cfg = state.cfg, chs = state.channels;
     let correct = 0;
-    let dpSum = 0;
+    let dpSum = 0, cSum = 0;
+    const allRts = [];
     chs.forEach(function (ch) {
       correct += ch.stats.hit + ch.stats.cr;
       ch.dp = dPrime(ch.stats);
+      ch.c = criterionC(ch.stats);
       dpSum += ch.dp;
+      cSum += ch.c;
+      ch.rts.forEach(function (v) { allRts.push(v); });
     });
     const judged = cfg.scorable * chs.length;
     const acc = correct / judged;
     const dp = dpSum / chs.length;
+    const rtMed = median(allRts);
 
-    store.history.unshift({ ts: Date.now(), mode: cfg.mode, rule: cfg.rule, n: cfg.n, acc: acc, dp: dp, speed: cfg.speed, S: cfg.scorable });
+    store.history.unshift({
+      ts: Date.now(), mode: cfg.mode, rule: cfg.rule, n: cfg.n, acc: acc, dp: dp,
+      c: cSum / chs.length, rt: rtMed === null ? null : Math.round(rtMed),
+      sec: Math.round(state.total * cfg.speed / 1000), speed: cfg.speed, S: cfg.scorable
+    });
     store.history = store.history.slice(0, 60);
-    saveStore();
-
     state.nextN = nextLevel(cfg.n, acc);
+    store.levels[cfg.mode + '/' + cfg.rule] = state.nextN;
+    saveStore();
     $('resAcc').textContent = Math.round(acc * 100) + '%';
     $('resSub').textContent = MODE_NAMES[cfg.mode] + ' · ' + ruleName(cfg.rule) + ' · N=' + cfg.n + ' · ' + judged + '회 중 ' + correct + '회 정답 · d′ ' + dp.toFixed(1);
 
@@ -937,6 +1273,13 @@ function bestN(history, mode, rule) {
       dl.appendChild(statCard('잘못 누름', ch.stats.fa));
       dl.appendChild(statCard('맞게 거름', ch.stats.cr));
       block.appendChild(dl);
+      const detail = document.createElement('p');
+      detail.className = 'hint';
+      const parts = ['d′ ' + ch.dp.toFixed(1), '반응 경향 ' + styleLabel(ch.c)];
+      const med = median(ch.rts);
+      if (med !== null) parts.push('정답 반응 ' + (med / 1000).toFixed(1) + '초');
+      detail.textContent = parts.join(' · ');
+      block.appendChild(detail);
       body.appendChild(block);
     });
 
@@ -946,7 +1289,8 @@ function bestN(history, mode, rule) {
     else if (acc >= 0.85) { advice = '최고 레벨(N=' + MAX_N + ')에서도 정확도가 높습니다. 속도를 줄이거나 직전 자극 표시를 끄거나 모드를 올려 보세요.'; nextLabel = 'N=' + cfg.n + '로 한 번 더'; }
     else { advice = '60~85% 구간이므로 같은 레벨에서 한 번 더 해 봅니다.'; nextLabel = 'N=' + cfg.n + '로 한 번 더'; }
     $('resAdvice').textContent = advice;
-    $('btnNext').textContent = nextLabel;
+    $('resHint').hidden = false;
+    wireNext(nextLabel, function () { setRadio('n', state.nextN); startBlock(); });
     showScreen('Result');
   }
 
@@ -1036,16 +1380,242 @@ function bestN(history, mode, rule) {
     }
   }
 
+  /* ---------- daily session ---------- */
+  function itemLabel(it) {
+    if (it.type === 'puzzle') return '관계 퍼즐 · 레벨 ' + it.level;
+    return MODE_NAMES[it.mode] + (it.rule === 'opp' ? ' · 반대 변화' : '') + ' · N=' + it.n;
+  }
+  function itemSec(it) {
+    if (it.type === 'puzzle') return PZ_COUNT * 25;
+    const speed = Number(getVal('speed')) || 3500;
+    const S = Number(getVal('len')) || 20;
+    return blockLength(it.n, S) * speed / 1000;
+  }
+  function renderToday() {
+    const plan = planSession(store.history, store.levels, store.pz.level);
+    const list = $('todayList');
+    list.innerHTML = '';
+    let total = 0;
+    plan.forEach(function (it, i) {
+      const sec = itemSec(it);
+      total += sec;
+      const li = document.createElement('li');
+      const a = document.createElement('span');
+      a.textContent = (i + 1) + '. ' + itemLabel(it);
+      const b = document.createElement('span');
+      b.textContent = '약 ' + Math.max(1, Math.round(sec / 60)) + '분';
+      li.appendChild(a);
+      li.appendChild(b);
+      list.appendChild(li);
+    });
+    $('todayEst').textContent = '전체 약 ' + Math.round(total / 60) + '분';
+    const today = dayNum(Date.now());
+    const done = todaySec(store.history, today);
+    const goal = GOAL_MIN * 60;
+    $('goalFill').style.width = Math.min(100, Math.round(done / goal * 100)) + '%';
+    const mins = Math.round(done / 60);
+    $('goalText').textContent = done >= goal
+      ? '오늘 연습 ' + mins + '분으로 목표 ' + GOAL_MIN + '분을 채웠습니다. 연습을 나눠서 하고 수면을 거치면 학습이 정착되는 데 유리하다는 연구가 있어서, 더 하고 싶다면 몇 시간 뒤를 권합니다.'
+      : '오늘 연습 ' + mins + '분 / 목표 ' + GOAL_MIN + '분';
+    $('btnSession').textContent = store.sessionDay === today ? '오늘 세션 한 번 더' : '세션 시작';
+  }
+  function applyAutoLevel() {
+    if (!$('optAuto').checked) return;
+    setRadio('n', levelOf(store.levels, getVal('mode') || 'num', getVal('rule') || 'same'));
+  }
+  function startItem(it) {
+    if (it.type === 'puzzle') startPuzzleSet();
+    else startBlock({ mode: it.mode, rule: it.rule, n: it.n });
+  }
+  function startSession() {
+    state.session = { items: planSession(store.history, store.levels, store.pz.level), idx: 0 };
+    if ($('optSound').checked) initAudio();
+    if ($('optBreath').checked) startBreath();
+    else startItem(state.session.items[0]);
+  }
+  function endSession() {
+    state.session = null;
+    store.sessionDay = dayNum(Date.now());
+    saveStore();
+    renderRecords();
+    showScreen('Start');
+  }
+  // Decides what the result screen's main button does: next session item, finish, or the usual next block.
+  function wireNext(defaultLabel, defaultFn) {
+    const s = state.session;
+    if (s && s.idx + 1 < s.items.length) {
+      $('btnNext').textContent = '다음: ' + itemLabel(s.items[s.idx + 1]);
+      state.onNext = function () { s.idx++; startItem(s.items[s.idx]); };
+    } else if (s) {
+      $('btnNext').textContent = '세션 마치기';
+      state.onNext = endSession;
+    } else {
+      $('btnNext').textContent = defaultLabel;
+      state.onNext = defaultFn;
+    }
+    $('sessProg').textContent = s ? '세션 ' + (s.idx + 1) + ' / ' + s.items.length + ' 완료' : '';
+    $('sessProg').hidden = !s;
+  }
+
+  /* ---------- breathing ---------- */
+  function paintBreath() {
+    const phase = (30 - state.breathLeft) % 10;
+    $('breathText').textContent = phase < 4 ? '들이쉬세요' : '내쉬세요';
+    $('breathCount').textContent = state.breathLeft + '초';
+  }
+  function startBreath() {
+    state.breathLeft = 30;
+    showScreen('Breath');
+    paintBreath();
+    clearTimeout(state.breathTimer);
+    state.breathTimer = setTimeout(breathTick, 1000);
+  }
+  function breathTick() {
+    state.breathLeft--;
+    if (state.breathLeft <= 0) { endBreath(); return; }
+    paintBreath();
+    state.breathTimer = setTimeout(breathTick, 1000);
+  }
+  function endBreath() {
+    clearTimeout(state.breathTimer);
+    if (state.session) startItem(state.session.items[0]);
+    else showScreen('Start');
+  }
+
+  /* ---------- relational puzzle ---------- */
+  function pzSVG(t, names, q) {
+    const font = 'font-family="IBM Plex Mono, ui-monospace, monospace" font-weight="600" text-anchor="middle" fill="currentColor"';
+    if (q) return '<svg viewBox="0 0 100 100" aria-hidden="true"><text x="50" y="66" font-size="46" ' + font + '>?</text></svg>';
+    const has = function (n) { return names.indexOf(n) >= 0; };
+    const solo = names.length === 1;
+    let s = '<svg viewBox="0 0 100 100" aria-hidden="true">';
+    if (has('size')) s += '<circle cx="50" cy="44" r="' + [0, 12, 20, 28][t.size] + '" fill="none" stroke="currentColor" stroke-width="3"/>';
+    if (has('rot')) s += '<path d="M0,-40 L26,-8 L10,-8 L10,38 L-10,38 L-10,-8 L-26,-8 Z" fill="currentColor" transform="translate(50 ' + (solo ? 50 : 44) + ') rotate(' + (t.rot * 45) + ') scale(' + (solo ? 1 : 0.5) + ')"/>';
+    if (has('num')) s += (has('rot') || has('size'))
+      ? '<text x="50" y="94" font-size="22" ' + font + '>' + t.num + '</text>'
+      : '<text x="50" y="66" font-size="46" ' + font + '>' + t.num + '</text>';
+    return s + '</svg>';
+  }
+  function startPuzzleSet() {
+    const level = Math.max(1, Math.min(PZ_MAX, Number(store.pz.level) || 1));
+    const set = [];
+    for (let k = 0; k < PZ_COUNT; k++) set.push(pzGenerate(level));
+    state.running = false;
+    state.pz = { level: level, puzzles: set, i: 0, results: [], t0: 0, answered: false, btns: [] };
+    showScreen('Puzzle');
+    showPuzzle();
+  }
+  function showPuzzle() {
+    const pz = state.pz, p = pz.puzzles[pz.i];
+    pz.answered = false;
+    pz.btns = [];
+    pz.t0 = Date.now();
+    $('pzProg').textContent = '문제 ' + (pz.i + 1) + ' / ' + PZ_COUNT + ' · 레벨 ' + pz.level;
+    $('pzPrompt').textContent = '규칙을 찾아 빈칸에 들어갈 그림을 고르세요.';
+    const grid = $('pzGrid');
+    grid.innerHTML = '';
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const cell = document.createElement('div');
+        const isQ = (r === 2 && c === 2);
+        cell.className = 'pzcell' + (isQ ? ' q' : '');
+        cell.innerHTML = pzSVG(p.cells[r][c], p.names, isQ);
+        grid.appendChild(cell);
+      }
+    }
+    const opts = $('pzOpts');
+    opts.innerHTML = '';
+    p.options.forEach(function (t, k) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'pzopt';
+      b.innerHTML = pzSVG(t, p.names, false);
+      b.setAttribute('aria-label', '보기 ' + (k + 1));
+      b.addEventListener('click', function () { answerPuzzle(k, b); });
+      opts.appendChild(b);
+      pz.btns.push(b);
+    });
+    $('pzFb').textContent = '';
+    $('pzFb').className = 'feedback';
+    $('pzExplain').textContent = '';
+    $('btnPzNext').hidden = true;
+  }
+  function answerPuzzle(k, btn) {
+    const pz = state.pz;
+    if (!pz || pz.answered) return;
+    pz.answered = true;
+    const p = pz.puzzles[pz.i];
+    const ok = (k === p.correct);
+    pz.results.push({ ok: ok, sec: (Date.now() - pz.t0) / 1000, explain: p.explain });
+    pz.btns.forEach(function (x, j) {
+      x.disabled = true;
+      if (j === p.correct) x.classList.add('right');
+    });
+    if (!ok) btn.classList.add('wrong');
+    $('pzFb').textContent = ok ? '정답' : '오답';
+    $('pzFb').className = 'feedback ' + (ok ? 'ok' : 'bad');
+    $('pzExplain').textContent = '규칙 · ' + p.explain;
+    $('btnPzNext').textContent = pz.i < PZ_COUNT - 1 ? '다음 문제' : '결과 보기';
+    $('btnPzNext').hidden = false;
+  }
+  function nextPuzzle() {
+    const pz = state.pz;
+    if (!pz || !pz.answered) return;
+    pz.i++;
+    if (pz.i >= PZ_COUNT) finishPuzzleSet();
+    else showPuzzle();
+  }
+  function finishPuzzleSet() {
+    const pz = state.pz, level = pz.level;
+    const right = pz.results.filter(function (r) { return r.ok; }).length;
+    const acc = right / PZ_COUNT;
+    const secs = pz.results.map(function (r) { return r.sec; });
+    const totalSec = secs.reduce(function (a, b) { return a + b; }, 0);
+    const med = median(secs);
+    store.history.unshift({ ts: Date.now(), mode: 'pz', rule: 'same', n: level, acc: acc, dp: 0, sec: Math.round(totalSec), rt: Math.round(med * 1000) });
+    store.history = store.history.slice(0, 60);
+    let next = level;
+    if (right >= 5) next = Math.min(PZ_MAX, level + 1);
+    else if (right <= 3) next = Math.max(1, level - 1);
+    store.pz.level = next;
+    store.pz.sets = (store.pz.sets || 0) + 1;
+    saveStore();
+
+    $('resAcc').textContent = Math.round(acc * 100) + '%';
+    $('resSub').textContent = '관계 퍼즐 · 레벨 ' + level + ' · ' + PZ_COUNT + '문제 중 ' + right + '문제 정답 · 풀이 시간 중앙값 ' + Math.round(med) + '초';
+    const body = $('resBody');
+    body.innerHTML = '';
+    const list = document.createElement('div');
+    list.className = 'pzlist';
+    pz.results.forEach(function (r, i) {
+      const line = document.createElement('p');
+      line.className = 'hint';
+      line.textContent = (i + 1) + '. ' + (r.ok ? '정답' : '오답') + ' · ' + r.explain;
+      list.appendChild(line);
+    });
+    body.appendChild(list);
+    $('resHint').hidden = true;
+    let advice, label;
+    if (next > level) { advice = '6문제 중 5문제 이상 맞혀서 다음 퍼즐은 레벨 ' + next + '로 올립니다.'; label = '레벨 ' + next + ' 퍼즐 계속'; }
+    else if (next < level) { advice = '정답이 3문제 이하여서 다음 퍼즐은 레벨 ' + next + '로 낮춥니다.'; label = '레벨 ' + next + ' 퍼즐 계속'; }
+    else { advice = '같은 레벨에서 한 번 더 풀어 봅니다. 틀린 문제는 위의 규칙 설명을 먼저 읽어 보세요.'; label = '레벨 ' + next + ' 퍼즐 한 번 더'; }
+    $('resAdvice').textContent = advice;
+    wireNext(label, startPuzzleSet);
+    showScreen('Result');
+  }
+
   /* ---------- events ---------- */
-  $('btnStart').addEventListener('click', startBlock);
+  $('btnStart').addEventListener('click', function () { state.session = null; startBlock(); });
+  $('btnSession').addEventListener('click', startSession);
+  $('btnPuzzle').addEventListener('click', function () { state.session = null; startPuzzleSet(); });
+  $('btnBreathSkip').addEventListener('click', endBreath);
+  $('btnPzNext').addEventListener('click', nextPuzzle);
+  $('btnPzQuit').addEventListener('click', quit);
   $('btnQuit').addEventListener('click', quit);
   $('btnPause').addEventListener('click', function () { if (state.paused) resume(); else pause(); });
   $('btnReset').addEventListener('click', onReset);
-  $('btnHome').addEventListener('click', function () { renderRecords(); showScreen('Start'); });
-  $('btnNext').addEventListener('click', function () {
-    setRadio('n', state.nextN);
-    startBlock();
-  });
+  $('btnHome').addEventListener('click', function () { state.session = null; renderRecords(); showScreen('Start'); });
+  $('btnNext').addEventListener('click', function () { if (state.onNext) state.onNext(); });
   document.addEventListener('keydown', function (e) {
     if (!state.running || state.paused) return;
     const k = e.key ? e.key.toLowerCase() : '';
@@ -1065,9 +1635,14 @@ function bestN(history, mode, rule) {
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && state.running) pause();
   });
-  $('settings').addEventListener('change', updateDescriptions);
+  $('settings').addEventListener('change', function (e) {
+    const t = e && e.target;
+    if (t && (t.name === 'mode' || t.name === 'rule' || t.id === 'optAuto')) applyAutoLevel();
+    updateDescriptions();
+  });
 
   applySaved();
+  applyAutoLevel();
   updateDescriptions();
 })();
 </script>
