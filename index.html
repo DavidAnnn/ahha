@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F2F5F8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E151B" media="(prefers-color-scheme: dark)">
+<meta name="description" content="숫자 사이의 변화량이나 공간 이동을 N번 전과 비교하는 관계형 n-back 연습 도구">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="N-Back">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<style>
+html { -webkit-text-size-adjust: 100%; padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+<title>관계형 N-Back</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column that moves between three states (settings, trial, result). The stimulus card is the only large object; everything else stays quiet. */
+:root {
+  --bg: #F2F5F8;
+  --surface: #FFFFFF;
+  --soft: #E8EEF6;
+  --ink: #13202B;
+  --muted: #586977;
+  --line: #D3DBE4;
+  --accent: #2150D0;
+  --accent-ink: #FFFFFF;
+  --good: #1B7F55;
+  --bad: #B8382A;
+  --font-body: "Noto Sans KR", system-ui, -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E151B;
+    --surface: #16202A;
+    --soft: #1B2833;
+    --ink: #E4ECF2;
+    --muted: #9BAAB7;
+    --line: #2A3946;
+    --accent: #7AA2FF;
+    --accent-ink: #0B1220;
+    --good: #4CC38A;
+    --bad: #FF8A7A;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E151B;
+  --surface: #16202A;
+  --soft: #1B2833;
+  --ink: #E4ECF2;
+  --muted: #9BAAB7;
+  --line: #2A3946;
+  --accent: #7AA2FF;
+  --accent-ink: #0B1220;
+  --good: #4CC38A;
+  --bad: #FF8A7A;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-block: 24px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+section { display: flex; flex-direction: column; gap: 20px; }
+h1 { margin: 0; font-size: 28px; line-height: 1.25; font-weight: 700; text-wrap: balance; }
+p { margin: 0; }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.lede { color: var(--muted); max-width: 46ch; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* Worked example */
+.example { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+.example-row { display: flex; align-items: center; justify-content: space-between; gap: 4px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.ex-num { font-size: 26px; font-weight: 600; width: 2ch; text-align: center; }
+.ex-delta { font-size: 13px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.ex-delta.hit { background: var(--accent); color: var(--accent-ink); }
+.example-cap { font-size: 13px; color: var(--muted); }
+
+/* Settings */
+form { display: flex; flex-direction: column; gap: 16px; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+legend { padding: 0; font-size: 13px; font-weight: 500; color: var(--muted); margin-bottom: 6px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.seg label { flex: 1; min-width: 0; position: relative; }
+.seg label + label { border-left: 1px solid var(--line); }
+.seg input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.seg span { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 8px; font-size: 14px; text-align: center; }
+.seg input:checked + span { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+.seg input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: -3px; }
+.seg input:checked:focus-visible + span { outline-color: var(--ink); }
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; cursor: pointer; }
+.check input { width: 20px; height: 20px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.check small { display: block; color: var(--muted); font-size: 13px; }
+.est { font-size: 13px; color: var(--muted); }
+
+button { font: inherit; color: inherit; }
+.btn { min-height: 52px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); font-size: 16px; font-weight: 700; padding: 0 20px; cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:focus-visible, .link:focus-visible, .match:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.actions { display: flex; flex-direction: column; gap: 10px; }
+
+.history { display: flex; flex-direction: column; gap: 6px; }
+.history h2 { margin: 0; font-size: 13px; font-weight: 500; color: var(--muted); }
+.history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.history li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.history li span:last-child { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 600; }
+.note { font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); padding-top: 14px; }
+
+/* Trial screen */
+.status { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
+.status b { font-family: var(--font-mono); font-weight: 600; }
+.phase { color: var(--muted); }
+.link { background: none; border: 0; color: var(--muted); text-decoration: underline; min-height: 44px; padding: 0 4px; cursor: pointer; font-size: 14px; }
+.bar { height: 4px; border-radius: 2px; background: var(--soft); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.bar i.run { animation: fill var(--dur, 3500ms) linear forwards; }
+@keyframes fill { from { width: 0; } to { width: 100%; } }
+
+.stage { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; min-height: 230px; padding: 20px; display: flex; align-items: center; justify-content: center; }
+.stage.ok { border-color: var(--good); box-shadow: 0 0 0 1px var(--good); }
+.stage.bad { border-color: var(--bad); box-shadow: 0 0 0 1px var(--bad); }
+.pair { display: flex; align-items: baseline; justify-content: center; gap: clamp(12px, 4vw, 24px); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.pair .prev { font-size: clamp(40px, 12vw, 56px); font-weight: 500; color: var(--muted); }
+.pair .arrow { font-size: 26px; color: var(--muted); }
+.pair .cur { font-size: clamp(72px, 24vw, 112px); font-weight: 600; line-height: 1; }
+.board { width: min(100%, 300px); aspect-ratio: 1; display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); }
+.cell { display: grid; place-items: center; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cell:nth-child(4n) { border-right: 0; }
+.cell:nth-child(n+13) { border-bottom: 0; }
+.dot, .ring { width: 48%; aspect-ratio: 1; border-radius: 50%; }
+.dot { background: var(--accent); }
+.ring { border: 2px solid var(--muted); }
+.feedback { min-height: 1.6em; text-align: center; font-size: 14px; color: var(--muted); }
+.feedback.ok { color: var(--good); font-weight: 700; }
+.feedback.bad { color: var(--bad); font-weight: 700; }
+
+.match { width: 100%; min-height: 84px; border-radius: 16px; border: 2px solid var(--accent); background: var(--accent); color: var(--accent-ink); font-size: 22px; font-weight: 700; cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.match[aria-pressed="true"] { background: var(--good); border-color: var(--good); color: var(--bg); }
+.match[aria-disabled="true"] { background: var(--surface); border: 2px dashed var(--line); color: var(--muted); font-weight: 500; font-size: 18px; cursor: default; }
+.keys { text-align: center; font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+/* Result */
+.big { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 72px; line-height: 1; font-weight: 600; }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.stats div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.stats dt { font-size: 13px; color: var(--muted); }
+.stats dd { margin: 0; font-family: var(--font-mono); font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.advice { color: var(--ink); }
+
+@media (prefers-reduced-motion: reduce) { .btn, .match { transition: none; } }
+</style>
+
+</head>
+<body>
+<main class="wrap">
+
+  <section id="screenStart">
+    <div>
+      <p class="eyebrow">작업기억 · 관계 추론 연습</p>
+      <h1>관계형 N-Back</h1>
+    </div>
+    <p class="lede">숫자나 위치 자체가 아니라, 직전 자극에서 지금 자극으로 바뀐 변화를 기억하고 N번 전의 변화와 비교합니다.</p>
+
+    <div class="example" role="group" aria-label="N=2 예시">
+      <div class="example-row">
+        <span class="ex-num">2</span><span class="ex-delta hit">+3</span>
+        <span class="ex-num">5</span><span class="ex-delta">−4</span>
+        <span class="ex-num">1</span><span class="ex-delta hit">+3</span>
+        <span class="ex-num">4</span>
+      </div>
+      <p class="example-cap">N=2 예시: 마지막 변화(+3)가 두 번 전의 변화(+3)와 같으므로 「같음」을 누릅니다. 숫자 4나 1이 아니라 변화량을 비교하는 것이 핵심입니다.</p>
+    </div>
+
+    <form id="settings" onsubmit="return false">
+      <fieldset>
+        <legend>모드</legend>
+        <div class="seg">
+          <label><input type="radio" name="mode" id="mode-num" value="num" checked><span>숫자 변화량</span></label>
+          <label><input type="radio" name="mode" id="mode-sp" value="sp"><span>공간 이동</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>N (몇 번 전과 비교할지)</legend>
+        <div class="seg">
+          <label><input type="radio" name="n" id="n-1" value="1" checked><span>1</span></label>
+          <label><input type="radio" name="n" id="n-2" value="2"><span>2</span></label>
+          <label><input type="radio" name="n" id="n-3" value="3"><span>3</span></label>
+          <label><input type="radio" name="n" id="n-4" value="4"><span>4</span></label>
+          <label><input type="radio" name="n" id="n-5" value="5"><span>5</span></label>
+        </div>
+      </fieldset>
+      <fieldset>
+        <legend>시도당 시간</legend>
+        <div class="seg">
+          <label><input type="radio" name="speed" id="speed-25" value="2500"><span>2.5초</span></label>
+          <label><input type="radio" name="speed" id="speed-35" value="3500" checked><span>3.5초</span></label>
+          <label><input type="radio" name="speed" id="speed-50" value="5000"><span>5초</span></label>
+        </div>
+      </fieldset>
+      <label class="check" for="showPrev">
+        <input type="checkbox" id="showPrev" checked>
+        <span>직전 숫자·위치를 함께 보여주기<small>끄면 직전 자극까지 기억해야 해서 더 어렵습니다.</small></span>
+      </label>
+      <p class="est" id="est"></p>
+      <button type="button" class="btn primary" id="btnStart">블록 시작</button>
+    </form>
+
+    <div class="history" id="history" hidden>
+      <h2>최근 기록</h2>
+      <ul id="historyList"></ul>
+    </div>
+
+    <p class="note">n-back 훈련이 지능이나 문제 해결력 같은 먼 영역까지 높인다는 근거는 아직 부족합니다. 관계형 변형도 마찬가지로 검증 중이므로, 새로운 종류의 작업기억 과제를 경험하는 연습으로 사용하세요.</p>
+  </section>
+
+  <section id="screenPlay" hidden>
+    <div class="status">
+      <div><b id="stN">N=1</b> · <span id="stProg" class="mono">1 / 22</span> · <span id="stPhase" class="phase">기억 단계</span></div>
+      <button type="button" class="link" id="btnQuit">중단</button>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+
+    <div class="stage" id="stage">
+      <div class="pair" id="stageNum" role="img" aria-label="">
+        <span class="prev" id="prevNum"></span>
+        <span class="arrow" id="arrow">→</span>
+        <span class="cur" id="curNum"></span>
+      </div>
+      <div class="board" id="stageBoard" role="img" aria-label="" hidden></div>
+    </div>
+    <p class="feedback" id="feedback" aria-live="polite"></p>
+
+    <button type="button" class="match" id="btnMatch" aria-pressed="false">같음</button>
+    <p class="keys">Space · Enter · J</p>
+  </section>
+
+  <section id="screenResult" hidden>
+    <p class="eyebrow">블록 결과</p>
+    <div>
+      <p class="big" id="resAcc">0%</p>
+      <p class="lede" id="resSub"></p>
+    </div>
+    <dl class="stats">
+      <div><dt>맞게 누름</dt><dd id="stHit">0</dd></div>
+      <div><dt>놓침</dt><dd id="stMiss">0</dd></div>
+      <div><dt>잘못 누름</dt><dd id="stFa">0</dd></div>
+      <div><dt>맞게 거름</dt><dd id="stCr">0</dd></div>
+    </dl>
+    <p class="advice" id="resAdvice"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="btnNext">다음 블록</button>
+      <button type="button" class="btn" id="btnHome">설정으로</button>
+    </div>
+  </section>
+
+</main>
+
+<script>
+/*LOGIC_START*/
+const GRID = 4, NUM_MIN = 1, NUM_MAX = 9, SCORABLE = 20, MAX_N = 5;
+
+function randInt(rng, n) { return Math.floor(rng() * n); }
+function pick(rng, arr) { return arr[randInt(rng, arr.length)]; }
+
+function allStimuli(mode) {
+  const a = [];
+  if (mode === 'num') {
+    for (let v = NUM_MIN; v <= NUM_MAX; v++) a.push(v);
+  } else {
+    for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) a.push({ x: x, y: y });
+  }
+  return a;
+}
+function same(mode, a, b) { return mode === 'num' ? a === b : (a.x === b.x && a.y === b.y); }
+
+// Relation between item t-1 and item t, as a comparable string.
+function relKey(mode, seq, t) {
+  if (t < 1) return null;
+  const a = seq[t - 1], b = seq[t];
+  return mode === 'num' ? String(b - a) : (b.x - a.x) + ',' + (b.y - a.y);
+}
+// A trial is a target when its relation equals the relation n trials earlier.
+function isTarget(mode, seq, t, n) {
+  return t >= n + 1 && relKey(mode, seq, t) === relKey(mode, seq, t - n);
+}
+function countTargets(mode, seq, n) {
+  let c = 0;
+  for (let t = n + 1; t < seq.length; t++) if (isTarget(mode, seq, t, n)) c++;
+  return c;
+}
+// True when, with seq[0..t-1] fixed, some next stimulus would repeat the relation from n trials earlier.
+// Used as a lookahead so the walk does not drift into corners where a repeat is impossible.
+function canRepeat(mode, seq, t, n, pool) {
+  if (t < n + 1) return true;
+  const ref = relKey(mode, seq, t - n);
+  const prev = seq[t - 1];
+  for (let i = 0; i < pool.length; i++) {
+    if (same(mode, pool[i], prev)) continue;
+    seq[t] = pool[i];
+    const ok = relKey(mode, seq, t) === ref;
+    seq.length = t;
+    if (ok) return true;
+  }
+  return false;
+}
+function generateOnce(mode, n, total, rate, rng) {
+  const pool = allStimuli(mode);
+  const seq = [pick(rng, pool)];
+  for (let t = 1; t < total; t++) {
+    const prev = seq[t - 1];
+    const cands = pool.filter(function (s) { return !same(mode, s, prev); });
+    let bucket = cands;
+    if (t >= n + 1) {
+      const ref = relKey(mode, seq, t - n);
+      const hit = [], miss = [];
+      cands.forEach(function (s) {
+        seq[t] = s;
+        (relKey(mode, seq, t) === ref ? hit : miss).push(s);
+      });
+      seq.length = t;
+      const wantHit = rng() < rate;
+      bucket = ((wantHit && hit.length) || !miss.length) ? hit : miss;
+    }
+    if (t + 1 < total) {
+      const keep = bucket.filter(function (s) {
+        seq[t] = s;
+        const ok = canRepeat(mode, seq, t + 1, n, pool);
+        seq.length = t;
+        return ok;
+      });
+      if (keep.length) bucket = keep;
+    }
+    seq.push(pick(rng, bucket));
+  }
+  return seq;
+}
+// A block has SCORABLE judged trials, preceded by n+1 trials used to store relations.
+function blockLength(n) { return SCORABLE + n + 1; }
+function generate(mode, n, rng) {
+  rng = rng || Math.random;
+  const total = blockLength(n);
+  const lo = Math.round(SCORABLE * 0.2), hi = Math.round(SCORABLE * 0.4);
+  let seq = null;
+  for (let i = 0; i < 80; i++) {
+    seq = generateOnce(mode, n, total, 0.3, rng);
+    const c = countTargets(mode, seq, n);
+    if (c >= lo && c <= hi) return seq;
+  }
+  return seq;
+}
+function nextLevel(n, acc) {
+  if (acc >= 0.85) return Math.min(MAX_N, n + 1);
+  if (acc < 0.6) return Math.max(1, n - 1);
+  return n;
+}
+function fmtSigned(v) { return v > 0 ? '+' + v : (v < 0 ? '−' + (-v) : '0'); }
+function fmtRel(mode, key) {
+  if (mode === 'num') return fmtSigned(Number(key));
+  const p = key.split(',').map(Number);
+  return '(' + fmtSigned(p[0]) + ', ' + fmtSigned(p[1]) + ')';
+}
+/*LOGIC_END*/
+
+(function () {
+  const $ = function (id) { return document.getElementById(id); };
+  const FEEDBACK_MS = 700;
+  const KEY = 'relnback.v1';
+
+  function loadStore() {
+    try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; }
+  }
+  function saveStore() {
+    try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (e) { /* storage unavailable */ }
+  }
+  const store = loadStore();
+  store.settings = store.settings || {};
+  store.history = Array.isArray(store.history) ? store.history : [];
+
+  const state = {
+    mode: 'num', n: 1, speed: 3500, showPrev: true,
+    seq: [], t: 0, pressed: false, locked: false, running: false,
+    stats: { hit: 0, miss: 0, fa: 0, cr: 0 }, timer: null, nextN: 1
+  };
+
+  function getVal(name) {
+    const el = document.querySelector('input[name="' + name + '"]:checked');
+    return el ? el.value : null;
+  }
+  function setRadio(name, val) {
+    const el = document.querySelector('input[name="' + name + '"][value="' + val + '"]');
+    if (el) el.checked = true;
+  }
+  function readSettings() {
+    state.mode = getVal('mode') || 'num';
+    state.n = Number(getVal('n')) || 1;
+    state.speed = Number(getVal('speed')) || 3500;
+    state.showPrev = $('showPrev').checked;
+    store.settings = { mode: state.mode, n: state.n, speed: state.speed, showPrev: state.showPrev };
+    saveStore();
+  }
+  function applySaved() {
+    const s = store.settings;
+    if (s.mode) setRadio('mode', s.mode);
+    if (s.n) setRadio('n', s.n);
+    if (s.speed) setRadio('speed', s.speed);
+    if (typeof s.showPrev === 'boolean') $('showPrev').checked = s.showPrev;
+  }
+  function showScreen(name) {
+    ['Start', 'Play', 'Result'].forEach(function (s) { $('screen' + s).hidden = (s !== name); });
+    window.scrollTo(0, 0);
+  }
+  function modeName(m) { return m === 'num' ? '숫자 변화량' : '공간 이동'; }
+
+  function updateEstimate() {
+    const n = Number(getVal('n')) || 1;
+    const speed = Number(getVal('speed')) || 3500;
+    const total = blockLength(n);
+    const sec = Math.round(total * speed / 1000);
+    const m = Math.floor(sec / 60), s = sec % 60;
+    $('est').textContent = '한 블록 ' + total + '시도 (판정 ' + SCORABLE + '회) · 약 ' + (m ? m + '분 ' : '') + s + '초';
+  }
+
+  function renderHistory() {
+    const list = $('historyList');
+    list.innerHTML = '';
+    const rows = store.history.slice(0, 5);
+    $('history').hidden = rows.length === 0;
+    rows.forEach(function (r) {
+      const li = document.createElement('li');
+      const d = new Date(r.ts);
+      const left = document.createElement('span');
+      left.textContent = d.toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' }) + ' · ' + modeName(r.mode) + ' · N=' + r.n;
+      const right = document.createElement('span');
+      right.textContent = Math.round(r.acc * 100) + '%';
+      li.appendChild(left); li.appendChild(right);
+      list.appendChild(li);
+    });
+  }
+
+  /* ---------- block flow ---------- */
+  function startBlock() {
+    readSettings();
+    state.seq = generate(state.mode, state.n);
+    state.t = 0;
+    state.stats = { hit: 0, miss: 0, fa: 0, cr: 0 };
+    state.running = true;
+    showScreen('Play');
+    runTrial();
+  }
+
+  function runTrial() {
+    state.pressed = false;
+    state.locked = false;
+    $('feedback').textContent = '';
+    $('feedback').className = 'feedback';
+    $('stage').className = 'stage';
+    paintStimulus();
+    paintStatus();
+    paintButton();
+    restartBar();
+    clearTimeout(state.timer);
+    state.timer = setTimeout(evaluate, state.speed - FEEDBACK_MS);
+  }
+
+  function evaluate() {
+    state.locked = true;
+    const t = state.t, n = state.n, mode = state.mode, seq = state.seq;
+    if (t >= n + 1) {
+      const target = isTarget(mode, seq, t, n);
+      const said = state.pressed;
+      let kind;
+      if (target && said) kind = 'hit';
+      else if (target && !said) kind = 'miss';
+      else if (!target && said) kind = 'fa';
+      else kind = 'cr';
+      state.stats[kind]++;
+      const ok = (kind === 'hit' || kind === 'cr');
+      const cur = fmtRel(mode, relKey(mode, seq, t));
+      const ref = fmtRel(mode, relKey(mode, seq, t - n));
+      let msg = '정답';
+      if (kind === 'miss') msg = '놓침: 변화 ' + cur + '는 ' + n + '번 전과 같았어요';
+      if (kind === 'fa') msg = '오답: 변화 ' + cur + ', ' + n + '번 전은 ' + ref;
+      $('feedback').textContent = msg;
+      $('feedback').className = 'feedback ' + (ok ? 'ok' : 'bad');
+      $('stage').className = 'stage ' + (ok ? 'ok' : 'bad');
+    }
+    paintButton();
+    state.timer = setTimeout(nextTrial, FEEDBACK_MS);
+  }
+
+  function nextTrial() {
+    state.t++;
+    if (state.t >= state.seq.length) finishBlock();
+    else runTrial();
+  }
+
+  function press() {
+    if (!state.running || state.locked || state.t < state.n + 1) return;
+    state.pressed = true;
+    paintButton();
+  }
+
+  function quit() {
+    clearTimeout(state.timer);
+    state.running = false;
+    renderHistory();
+    showScreen('Start');
+  }
+
+  function finishBlock() {
+    clearTimeout(state.timer);
+    state.running = false;
+    const s = state.stats;
+    const acc = (s.hit + s.cr) / SCORABLE;
+    store.history.unshift({ ts: Date.now(), mode: state.mode, n: state.n, acc: acc, hit: s.hit, miss: s.miss, fa: s.fa, cr: s.cr });
+    store.history = store.history.slice(0, 20);
+    saveStore();
+
+    state.nextN = nextLevel(state.n, acc);
+    $('resAcc').textContent = Math.round(acc * 100) + '%';
+    $('resSub').textContent = modeName(state.mode) + ' · N=' + state.n + ' · ' + SCORABLE + '회 중 ' + (s.hit + s.cr) + '회 정답';
+    $('stHit').textContent = s.hit;
+    $('stMiss').textContent = s.miss;
+    $('stFa').textContent = s.fa;
+    $('stCr').textContent = s.cr;
+
+    let advice, nextLabel;
+    if (state.nextN > state.n) { advice = '정확도가 85% 이상이어서 다음 블록은 N=' + state.nextN + '로 올립니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
+    else if (state.nextN < state.n) { advice = '정확도가 60% 미만이어서 다음 블록은 N=' + state.nextN + '로 낮춥니다.'; nextLabel = 'N=' + state.nextN + '로 다음 블록'; }
+    else if (acc >= 0.85) { advice = '최고 레벨(N=' + MAX_N + ')에서도 정확도가 높습니다. 속도를 줄이거나 직전 자극 표시를 꺼 보세요.'; nextLabel = 'N=' + state.n + '로 한 번 더'; }
+    else { advice = '60~85% 구간이므로 같은 레벨에서 한 번 더 해 봅니다.'; nextLabel = 'N=' + state.n + '로 한 번 더'; }
+    $('resAdvice').textContent = advice;
+    $('btnNext').textContent = nextLabel;
+    showScreen('Result');
+  }
+
+  /* ---------- painting ---------- */
+  function paintStatus() {
+    const t = state.t, n = state.n;
+    $('stN').textContent = 'N=' + n;
+    $('stProg').textContent = (t + 1) + ' / ' + state.seq.length;
+    $('stPhase').textContent = t >= n + 1 ? '판단' : '기억 단계';
+  }
+
+  function paintButton() {
+    const b = $('btnMatch');
+    const memory = state.t < state.n + 1;
+    if (memory) {
+      b.setAttribute('aria-disabled', 'true');
+      b.setAttribute('aria-pressed', 'false');
+      b.textContent = '변화를 기억하세요';
+    } else {
+      b.setAttribute('aria-disabled', 'false');
+      b.setAttribute('aria-pressed', state.pressed ? 'true' : 'false');
+      b.textContent = state.pressed ? '같음 선택됨' : '같음';
+    }
+  }
+
+  function restartBar() {
+    const bar = $('barFill');
+    bar.classList.remove('run');
+    void bar.offsetWidth;
+    bar.style.setProperty('--dur', state.speed + 'ms');
+    bar.classList.add('run');
+  }
+
+  function buildBoard() {
+    const board = $('stageBoard');
+    if (board.children.length === GRID * GRID) return;
+    board.innerHTML = '';
+    for (let i = 0; i < GRID * GRID; i++) {
+      const c = document.createElement('div');
+      c.className = 'cell';
+      board.appendChild(c);
+    }
+  }
+
+  function paintStimulus() {
+    const t = state.t, seq = state.seq;
+    const withPrev = state.showPrev && t >= 1;
+    if (state.mode === 'num') {
+      $('stageNum').hidden = false;
+      $('stageBoard').hidden = true;
+      $('curNum').textContent = seq[t];
+      $('prevNum').textContent = withPrev ? seq[t - 1] : '';
+      $('prevNum').hidden = !withPrev;
+      $('arrow').hidden = !withPrev;
+      $('stageNum').setAttribute('aria-label', withPrev ? '직전 ' + seq[t - 1] + ', 현재 ' + seq[t] : '현재 ' + seq[t]);
+    } else {
+      $('stageNum').hidden = true;
+      $('stageBoard').hidden = false;
+      buildBoard();
+      const cells = $('stageBoard').children;
+      for (let i = 0; i < cells.length; i++) cells[i].innerHTML = '';
+      const cur = seq[t];
+      const curEl = document.createElement('div');
+      curEl.className = 'dot';
+      cells[cur.y * GRID + cur.x].appendChild(curEl);
+      if (withPrev) {
+        const p = seq[t - 1];
+        const ringEl = document.createElement('div');
+        ringEl.className = 'ring';
+        cells[p.y * GRID + p.x].appendChild(ringEl);
+      }
+      $('stageBoard').setAttribute('aria-label', '현재 위치 ' + (cur.y + 1) + '행 ' + (cur.x + 1) + '열');
+    }
+  }
+
+  /* ---------- events ---------- */
+  $('btnStart').addEventListener('click', startBlock);
+  $('btnQuit').addEventListener('click', quit);
+  $('btnHome').addEventListener('click', function () { renderHistory(); showScreen('Start'); });
+  $('btnNext').addEventListener('click', function () {
+    setRadio('n', state.nextN);
+    startBlock();
+  });
+  $('btnMatch').addEventListener('pointerdown', function (e) { e.preventDefault(); press(); });
+  $('btnMatch').addEventListener('click', press);
+  document.addEventListener('keydown', function (e) {
+    if (!state.running) return;
+    const k = e.key ? e.key.toLowerCase() : '';
+    if (e.code === 'Space' || k === 'enter' || k === 'j') {
+      e.preventDefault();
+      press();
+    }
+  });
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && state.running) quit();
+  });
+  $('settings').addEventListener('change', function () { updateEstimate(); });
+
+  applySaved();
+  updateEstimate();
+  renderHistory();
+})();
+</script>
+<script src="sw-register.js"></script>
+</body>
+</html>
