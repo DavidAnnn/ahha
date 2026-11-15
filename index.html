@@ -634,14 +634,23 @@ function todaySec(history, today) {
 }
 
 /* ---------- relational puzzles (3x3 matrix reasoning) ---------- */
-const PZ_MAX = 5;
+const PZ_MAX = 10;
 const PZ_ATTR = {
   num: { min: 1, max: 9, mod: false, label: '숫자' },
   rot: { min: 0, max: 7, mod: true, label: '화살표 방향' },
-  size: { min: 1, max: 3, mod: false, label: '원 크기' }
+  size: { min: 1, max: 3, mod: false, label: '원 크기' },
+  dots: { min: 1, max: 4, mod: false, label: '점 개수' }
 };
-const PZ_ORDER = ['num', 'rot', 'size'];
-const PZ_KINDS = { 1: ['across', 'down'], 2: ['both', 'sum'], 3: ['across', 'down', 'both'], 4: ['both', 'sum', 'latin'], 5: ['across', 'down', 'both', 'sum', 'latin'] };
+const PZ_ORDER = ['num', 'rot', 'size', 'dots'];
+const ALL_KINDS = ['across', 'down', 'both', 'sum', 'latin', 'diff', 'accel'];
+const PZ_KINDS = {
+  1: ['across', 'down'], 2: ['both', 'sum'], 3: ['across', 'down', 'both'], 4: ['both', 'sum', 'latin'], 5: ['across', 'down', 'both', 'sum', 'latin'],
+  6: ALL_KINDS, 7: ALL_KINDS, 8: ALL_KINDS, 9: ALL_KINDS, 10: ALL_KINDS
+};
+// Attributes per puzzle, and how many of them must use a hard rule (sum, latin square, difference, accelerating steps).
+const PZ_NATTR = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3, 7: 3, 8: 4, 9: 4, 10: 4 };
+const PZ_COMPLEX = ['sum', 'latin', 'diff', 'accel'];
+const PZ_MIN_COMPLEX = { 6: 0, 7: 2, 8: 2, 9: 3, 10: 4 };
 
 function pzDomain(a) {
   const d = [];
@@ -659,26 +668,38 @@ function pzPredict(a, g) {
   const dom = pzDomain(a), d = PZ_ATTR[a];
   const steps = d.mod ? dom : [-4, -3, -2, -1, 0, 1, 2, 3, 4];
   const out = {};
-  dom.forEach(function (base) {
-    steps.forEach(function (p) {
-      steps.forEach(function (q) {
-        let ok = true;
-        for (let r = 0; r < 3 && ok; r++) {
-          for (let c = 0; c < 3; c++) {
-            if (r === 2 && c === 2) continue;
-            if (pzNorm(a, base + r * p + c * q) !== g[r][c]) { ok = false; break; }
+  // Steady steps plus an optional extra change in the last column (e) and last row (f):
+  // v(r,c) = base + r*p + c*q + [c==2]*e + [r==2]*f. With e = f = 0 this is a plain linear rule.
+  // The top-left cell has r = c = 0, so it fixes the base value.
+  const base = g[0][0];
+  steps.forEach(function (p) {
+    steps.forEach(function (q) {
+      [-1, 0, 1].forEach(function (e) {
+        [-1, 0, 1].forEach(function (f) {
+          let ok = true;
+          for (let r = 0; r < 3 && ok; r++) {
+            for (let c = 0; c < 3; c++) {
+              if (r === 2 && c === 2) continue;
+              if (pzNorm(a, base + r * p + c * q + (c === 2 ? e : 0) + (r === 2 ? f : 0)) !== g[r][c]) { ok = false; break; }
+            }
           }
-        }
-        if (ok) {
-          const v = pzNorm(a, base + 2 * p + 2 * q);
-          if (v !== null) out[v] = true;
-        }
+          if (ok) {
+            const v = pzNorm(a, base + 2 * p + 2 * q + e + f);
+            if (v !== null) out[v] = true;
+          }
+        });
       });
     });
   });
+  void dom;
   const add = function (x, y) { return pzNorm(a, x + y); };
   if (add(g[0][0], g[0][1]) === g[0][2] && add(g[1][0], g[1][1]) === g[1][2]) {
     const v = add(g[2][0], g[2][1]);
+    if (v !== null) out[v] = true;
+  }
+  const sub = function (x, y) { return pzNorm(a, x - y); };
+  if (sub(g[0][0], g[0][1]) === g[0][2] && sub(g[1][0], g[1][1]) === g[1][2]) {
+    const v = sub(g[2][0], g[2][1]);
     if (v !== null) out[v] = true;
   }
   const S = [g[0][0], g[0][1], g[0][2]];
@@ -709,7 +730,7 @@ function pzGenAttr(a, kind, rng) {
   const maxS = a === 'size' ? 1 : 3;
   const rs = function () { const s = 1 + randInt(rng, maxS); return rng() < 0.5 ? s : -s; };
   const g = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-  const info = { name: a, kind: kind, g: g, p: 0, q: 0, base: 0 };
+  const info = { name: a, kind: kind, g: g, p: 0, q: 0, e: 0, f: 0, base: 0 };
   if (kind === 'across' || kind === 'down' || kind === 'both') {
     info.p = kind === 'across' ? 0 : rs();
     info.q = kind === 'down' ? 0 : rs();
@@ -720,6 +741,27 @@ function pzGenAttr(a, kind, rng) {
         if (v === null) return null;
         g[r][c] = v;
       }
+    }
+  } else if (kind === 'accel') {
+    // The size of the step itself changes: for example +1 then +2 across, or −1 then −3 down.
+    info.p = rng() < 0.5 ? 0 : rs();
+    info.q = rng() < 0.5 ? 0 : rs();
+    info.e = rng() < 0.5 ? 1 : -1;
+    info.f = rng() < 0.5 ? 0 : (rng() < 0.5 ? 1 : -1);
+    if (rng() < 0.5) { const t = info.e; info.e = info.f; info.f = t; }
+    info.base = pick(rng, dom);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const v = pzNorm(a, info.base + r * info.p + c * info.q + (c === 2 ? info.e : 0) + (r === 2 ? info.f : 0));
+        if (v === null) return null;
+        g[r][c] = v;
+      }
+    }
+  } else if (kind === 'diff') {
+    for (let r = 0; r < 3; r++) {
+      const x = pick(rng, dom), y = pick(rng, dom), z = pzNorm(a, x - y);
+      if (z === null) return null;
+      g[r][0] = x; g[r][1] = y; g[r][2] = z;
     }
   } else if (kind === 'sum') {
     if (a === 'size') return null;
@@ -738,6 +780,7 @@ function pzGenAttr(a, kind, rng) {
   return info;
 }
 function pzStepText(name, s) {
+  if (s === 0) return name === 'rot' ? '0°' : '0';
   const sign = s > 0 ? '+' : '−';
   if (name === 'rot') return sign + Math.abs(s) * 45 + '°';
   if (name === 'size') return sign + Math.abs(s) + '단계';
@@ -750,22 +793,44 @@ function pzDescribe(a) {
   if (a.kind === 'down') return label + ': 세로로 한 칸 내려갈 때마다 ' + st(a.p);
   if (a.kind === 'both') return label + ': 가로로 한 칸마다 ' + st(a.q) + ', 세로로 한 칸마다 ' + st(a.p);
   if (a.kind === 'sum') return label + ': 각 줄에서 첫째 칸과 둘째 칸을 더하면 셋째 칸' + (a.name === 'rot' ? ' (각도를 더함)' : '');
+  if (a.kind === 'diff') return label + ': 각 줄에서 첫째 칸에서 둘째 칸을 빼면 셋째 칸' + (a.name === 'rot' ? ' (각도를 뺌)' : '');
+  if (a.kind === 'accel') {
+    const across = '가로로 ' + (a.e !== 0 ? '첫 변화 ' + st(a.q) + ', 그다음 변화 ' + st(a.q + a.e) : '한 칸마다 ' + st(a.q));
+    const down = '세로로 ' + (a.f !== 0 ? '첫 변화 ' + st(a.p) + ', 그다음 변화 ' + st(a.p + a.f) : '한 칸마다 ' + st(a.p));
+    return label + ': ' + across + ', ' + down;
+  }
   return label + ': 각 줄과 각 열에 같은 세 가지 값이 한 번씩 나옴';
 }
 function pzGenerate(level, rng) {
   rng = rng || Math.random;
   level = Math.max(1, Math.min(PZ_MAX, Math.round(level) || 1));
-  const nAttr = level <= 2 ? 1 : (level <= 4 ? 2 : 3);
-  const pool = level <= 2 ? ['num', 'rot'] : ['num', 'rot', 'size'];
-  for (let tries = 0; tries < 3000; tries++) {
+  const nAttr = PZ_NATTR[level];
+  const pool = level <= 2 ? ['num', 'rot'] : (level <= 5 ? ['num', 'rot', 'size'] : ['num', 'rot', 'size', 'dots']);
+  const kindPool = PZ_KINDS[level];
+  const hardPool = kindPool.filter(function (k) { return PZ_COMPLEX.indexOf(k) >= 0; });
+  const minComplex = PZ_MIN_COMPLEX[level] || 0;
+  const usable = function (name, list) { return list.filter(function (k) { return !(k === 'sum' && name === 'size'); }); };
+  const nearOf = function (n, v) {
+    const out = [];
+    [-1, 1].forEach(function (d) { const w = pzNorm(n, v + d); if (w !== null && w !== v && out.indexOf(w) < 0) out.push(w); });
+    return out;
+  };
+  for (let tries = 0; tries < 200; tries++) {
     const names = shuffled(rng, pool).slice(0, nAttr).sort(function (a, b) { return PZ_ORDER.indexOf(a) - PZ_ORDER.indexOf(b); });
+    // The first minComplex attributes, in random order, get a hard rule; the rest draw from the whole pool.
+    const kinds = [];
+    shuffled(rng, names.map(function (_, i) { return i; })).forEach(function (idx, rank) {
+      kinds[idx] = pick(rng, usable(names[idx], rank < minComplex ? hardPool : kindPool));
+    });
+    // Attributes are solved independently, so each one is retried until its own grid has exactly one answer.
     const attrs = [];
-    for (let i = 0; i < names.length; i++) {
-      const a = pzGenAttr(names[i], pick(rng, PZ_KINDS[level]), rng);
-      if (!a) break;
-      attrs.push(a);
+    let failed = false;
+    for (let i = 0; i < names.length && !failed; i++) {
+      let a = null;
+      for (let k = 0; k < 500 && !a; k++) a = pzGenAttr(names[i], kinds[i], rng);
+      if (a) attrs.push(a); else failed = true;
     }
-    if (attrs.length !== names.length) continue;
+    if (failed) continue;
     const cells = [];
     for (let r = 0; r < 3; r++) {
       const row = [];
@@ -780,16 +845,37 @@ function pzGenerate(level, rng) {
     const key = function (t) { return names.map(function (n) { return t[n]; }).join(','); };
     const seen = {};
     seen[key(answer)] = true;
-    const singles = [];
+    const far = [], near = [];
     names.forEach(function (n) {
+      const nb = nearOf(n, answer[n]);
       pzDomain(n).forEach(function (v) {
-        if (v !== answer[n]) { const t = Object.assign({}, answer); t[n] = v; singles.push(t); }
+        if (v === answer[n]) return;
+        const t = Object.assign({}, answer);
+        t[n] = v;
+        (nb.indexOf(v) >= 0 ? near : far).push(t);
       });
     });
+    // From level 9 on, some wrong answers are off by one step in two attributes at once.
+    if (level >= 9) {
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          nearOf(names[i], answer[names[i]]).forEach(function (vi) {
+            nearOf(names[j], answer[names[j]]).forEach(function (vj) {
+              const t = Object.assign({}, answer);
+              t[names[i]] = vi; t[names[j]] = vj;
+              near.push(t);
+            });
+          });
+        }
+      }
+    }
     const opts = [];
-    shuffled(rng, singles).forEach(function (t) {
-      if (opts.length < 5 && !seen[key(t)]) { seen[key(t)] = true; opts.push(t); }
-    });
+    const take = function (list) {
+      shuffled(rng, list).forEach(function (t) {
+        if (opts.length < 5 && !seen[key(t)]) { seen[key(t)] = true; opts.push(t); }
+      });
+    };
+    if (level >= 6) { take(near); take(far); } else { take(near.concat(far)); }
     for (let k = 0; k < 200 && opts.length < 5; k++) {
       const t = {};
       names.forEach(function (n) { t[n] = pick(rng, pzDomain(n)); });
@@ -1386,7 +1472,7 @@ function planSession(history, levels, pzLevel) {
     return MODE_NAMES[it.mode] + (it.rule === 'opp' ? ' · 반대 변화' : '') + ' · N=' + it.n;
   }
   function itemSec(it) {
-    if (it.type === 'puzzle') return PZ_COUNT * 25;
+    if (it.type === 'puzzle') return PZ_COUNT * (20 + 5 * it.level);
     const speed = Number(getVal('speed')) || 3500;
     const S = Number(getVal('len')) || 20;
     return blockLength(it.n, S) * speed / 1000;
@@ -1494,6 +1580,9 @@ function planSession(history, levels, pzLevel) {
     if (has('num')) s += (has('rot') || has('size'))
       ? '<text x="50" y="94" font-size="22" ' + font + '>' + t.num + '</text>'
       : '<text x="50" y="66" font-size="46" ' + font + '>' + t.num + '</text>';
+    if (has('dots')) {
+      for (let i = 0; i < t.dots; i++) s += '<circle cx="' + (50 + (i - (t.dots - 1) / 2) * 14) + '" cy="9" r="4.5" fill="currentColor"/>';
+    }
     return s + '</svg>';
   }
   function startPuzzleSet() {
