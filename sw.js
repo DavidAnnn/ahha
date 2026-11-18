@@ -1,4 +1,4 @@
-const CACHE = 'relnback-v4';
+const CACHE = 'relnback-v6';
 const ASSETS = [
   './',
   'index.html',

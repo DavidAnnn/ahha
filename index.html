@@ -231,6 +231,9 @@ button { font: inherit; color: inherit; }
 .pzopt.wrong { border: 2px solid var(--bad); }
 .pzexplain { font-size: 14px; min-height: 1.6em; }
 .pzlist { display: flex; flex-direction: column; gap: 6px; }
+#pzTimerRow { display: flex; flex-direction: column; gap: 6px; }
+.pzgrid.covered .pzcell { background: var(--soft); border-style: dashed; }
+.pzgrid.covered .pzcell svg { visibility: hidden; }
 
 @media (prefers-reduced-motion: reduce) { .btn, .match { transition: none; } .breath-circle { animation: none; } }
 </style>
@@ -419,6 +422,10 @@ button { font: inherit; color: inherit; }
       <button type="button" class="link" id="btnPzQuit">중단</button>
     </div>
     <p class="hint" id="pzPrompt"></p>
+    <div id="pzTimerRow" hidden>
+      <div class="bar"><i id="pzBar"></i></div>
+      <p class="hint" id="pzTimer"></p>
+    </div>
     <div class="pzgrid" id="pzGrid" role="group" aria-label="3×3 규칙 퍼즐"></div>
     <div class="pzopts" id="pzOpts" role="group" aria-label="보기"></div>
     <p class="feedback" id="pzFb" aria-live="polite"></p>
@@ -634,14 +641,15 @@ function todaySec(history, today) {
 }
 
 /* ---------- relational puzzles (3x3 matrix reasoning) ---------- */
-const PZ_MAX = 10;
+const PZ_MAX = 20;
 const PZ_ATTR = {
   num: { min: 1, max: 9, mod: false, label: '숫자' },
   rot: { min: 0, max: 7, mod: true, label: '화살표 방향' },
   size: { min: 1, max: 3, mod: false, label: '원 크기' },
-  dots: { min: 1, max: 4, mod: false, label: '점 개수' }
+  dots: { min: 1, max: 4, mod: false, label: '점 개수' },
+  tick: { min: 1, max: 4, mod: false, label: '오른쪽 네모 개수' }
 };
-const PZ_ORDER = ['num', 'rot', 'size', 'dots'];
+const PZ_ORDER = ['num', 'rot', 'size', 'dots', 'tick'];
 const ALL_KINDS = ['across', 'down', 'both', 'sum', 'latin', 'diff', 'accel'];
 const PZ_KINDS = {
   1: ['across', 'down'], 2: ['both', 'sum'], 3: ['across', 'down', 'both'], 4: ['both', 'sum', 'latin'], 5: ['across', 'down', 'both', 'sum', 'latin'],
@@ -651,6 +659,20 @@ const PZ_KINDS = {
 const PZ_NATTR = { 1: 1, 2: 1, 3: 2, 4: 2, 5: 3, 6: 3, 7: 3, 8: 4, 9: 4, 10: 4 };
 const PZ_COMPLEX = ['sum', 'latin', 'diff', 'accel'];
 const PZ_MIN_COMPLEX = { 6: 0, 7: 2, 8: 2, 9: 3, 10: 4 };
+// Levels 11-20 get harder through the rules themselves, not through time pressure:
+//   new rule kinds: 'steprow' (the step changes from row to row), 'balance' (every row adds up to the same total),
+//   'max' / 'min' (third cell is the larger / smaller of the first two);
+//   linked attributes: one attribute is not a pattern of its own but is decoded from another attribute in the same cell.
+// n = attributes, newK = independent attributes that must use a new kind, link = attributes decoded from another one.
+const PZ_NEW = ['steprow', 'balance', 'max', 'min'];
+const PZ_CFG = {
+  11: { n: 4, newK: 1, link: 0 }, 12: { n: 4, newK: 2, link: 0 }, 13: { n: 5, newK: 2, link: 0 }, 14: { n: 5, newK: 3, link: 0 },
+  15: { n: 4, newK: 1, link: 1 }, 16: { n: 5, newK: 2, link: 1 }, 17: { n: 5, newK: 3, link: 1 },
+  18: { n: 5, newK: 2, link: 2 }, 19: { n: 5, newK: 3, link: 2 }, 20: { n: 5, newK: 3, link: 2 }
+};
+for (let lv = 11; lv <= 20; lv++) { PZ_KINDS[lv] = PZ_COMPLEX.concat(PZ_NEW); PZ_NATTR[lv] = PZ_CFG[lv].n; }
+// No time limits any more; kept as a function so callers need no special case.
+function pzTiming() { return null; }
 
 function pzDomain(a) {
   const d = [];
@@ -664,34 +686,54 @@ function pzNorm(a, v) {
   return (v >= d.min && v <= d.max) ? v : null;
 }
 // Every value that some consistent rule would put in the missing cell (row 3, column 3).
-function pzPredict(a, g) {
+function pzPredict(a, g, ext) {
   const dom = pzDomain(a), d = PZ_ATTR[a];
   const steps = d.mod ? dom : [-4, -3, -2, -1, 0, 1, 2, 3, 4];
   const out = {};
   // Steady steps plus an optional extra change in the last column (e) and last row (f):
   // v(r,c) = base + r*p + c*q + [c==2]*e + [r==2]*f. With e = f = 0 this is a plain linear rule.
+  // With ext, the horizontal step may also change from row to row: + r*c*k.
   // The top-left cell has r = c = 0, so it fixes the base value.
   const base = g[0][0];
+  const ks = ext ? [-1, 0, 1] : [0];
   steps.forEach(function (p) {
     steps.forEach(function (q) {
-      [-1, 0, 1].forEach(function (e) {
-        [-1, 0, 1].forEach(function (f) {
-          let ok = true;
-          for (let r = 0; r < 3 && ok; r++) {
-            for (let c = 0; c < 3; c++) {
-              if (r === 2 && c === 2) continue;
-              if (pzNorm(a, base + r * p + c * q + (c === 2 ? e : 0) + (r === 2 ? f : 0)) !== g[r][c]) { ok = false; break; }
+      ks.forEach(function (k) {
+        [-1, 0, 1].forEach(function (e) {
+          [-1, 0, 1].forEach(function (f) {
+            let ok = true;
+            for (let r = 0; r < 3 && ok; r++) {
+              for (let c = 0; c < 3; c++) {
+                if (r === 2 && c === 2) continue;
+                if (pzNorm(a, base + r * p + c * q + r * c * k + (c === 2 ? e : 0) + (r === 2 ? f : 0)) !== g[r][c]) { ok = false; break; }
+              }
             }
-          }
-          if (ok) {
-            const v = pzNorm(a, base + 2 * p + 2 * q + e + f);
-            if (v !== null) out[v] = true;
-          }
+            if (ok) {
+              const v = pzNorm(a, base + 2 * p + 2 * q + 4 * k + e + f);
+              if (v !== null) out[v] = true;
+            }
+          });
         });
       });
     });
   });
-  void dom;
+  if (ext) {
+    // Every row (or column) adds up to the same total.
+    const same = function (x, y) { return d.mod ? pzNorm(a, x) === pzNorm(a, y) : x === y; };
+    const rs = function (r) { return g[r][0] + g[r][1] + g[r][2]; };
+    const cs = function (c) { return g[0][c] + g[1][c] + g[2][c]; };
+    if (same(rs(0), rs(1))) { const v = pzNorm(a, rs(0) - g[2][0] - g[2][1]); if (v !== null) out[v] = true; }
+    if (same(g[0][0] + g[1][0] + g[2][0], g[0][1] + g[1][1] + g[2][1])) {
+      const v = pzNorm(a, g[0][0] + g[1][0] + g[2][0] - g[0][2] - g[1][2]);
+      if (v !== null) out[v] = true;
+    }
+    void cs;
+    // Third cell of a row is the larger / smaller of the first two (not for circular attributes).
+    if (!d.mod) {
+      if (Math.max(g[0][0], g[0][1]) === g[0][2] && Math.max(g[1][0], g[1][1]) === g[1][2]) out[Math.max(g[2][0], g[2][1])] = true;
+      if (Math.min(g[0][0], g[0][1]) === g[0][2] && Math.min(g[1][0], g[1][1]) === g[1][2]) out[Math.min(g[2][0], g[2][1])] = true;
+    }
+  }
   const add = function (x, y) { return pzNorm(a, x + y); };
   if (add(g[0][0], g[0][1]) === g[0][2] && add(g[1][0], g[1][1]) === g[1][2]) {
     const v = add(g[2][0], g[2][1]);
@@ -725,7 +767,29 @@ function pzPredict(a, g) {
   }
   return Object.keys(out).map(Number).sort(function (x, y) { return x - y; });
 }
-function pzGenAttr(a, kind, rng) {
+// Linked attribute: b = wrap(b0 + alpha * (A - Amin)), wrapping inside b's own range.
+function pzLinkVal(b, a, alpha, b0, av) {
+  const db = PZ_ATTR[b], M = db.max - db.min + 1;
+  return db.min + ((((b0 - db.min) + alpha * (av - PZ_ATTR[a].min)) % M) + M) % M;
+}
+const PZ_LINK_ALPHAS = [-3, -2, -1, 1, 2, 3];
+// Values the missing cell of attribute b could take if b were decoded from attribute a (whose answer is aAns).
+function pzPredictLink(b, gB, a, gA, aAns) {
+  const out = {};
+  pzDomain(b).forEach(function (b0) {
+    PZ_LINK_ALPHAS.forEach(function (alpha) {
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (r === 2 && c === 2) continue;
+          if (pzLinkVal(b, a, alpha, b0, gA[r][c]) !== gB[r][c]) return;
+        }
+      }
+      out[pzLinkVal(b, a, alpha, b0, aAns)] = true;
+    });
+  });
+  return Object.keys(out).map(Number);
+}
+function pzGenAttr(a, kind, rng, ext) {
   const dom = pzDomain(a);
   const maxS = a === 'size' ? 1 : 3;
   const rs = function () { const s = 1 + randInt(rng, maxS); return rng() < 0.5 ? s : -s; };
@@ -757,6 +821,36 @@ function pzGenAttr(a, kind, rng) {
         g[r][c] = v;
       }
     }
+  } else if (kind === 'steprow') {
+    // Row r starts at base + r*p and steps by q + r*k horizontally.
+    info.p = rng() < 0.4 ? 0 : rs();
+    info.q = rs();
+    info.k = rng() < 0.5 ? 1 : -1;
+    info.base = pick(rng, dom);
+    for (let r = 0; r < 3; r++) {
+      for (let c = 0; c < 3; c++) {
+        const v = pzNorm(a, info.base + r * info.p + c * info.q + r * c * info.k);
+        if (v === null) return null;
+        g[r][c] = v;
+      }
+    }
+  } else if (kind === 'balance') {
+    const d = PZ_ATTR[a];
+    // Circular attributes (rotation) add up modulo 8, so the total is only known as an angle.
+    const total = d.mod ? randInt(rng, 8) : d.min * 3 + 1 + randInt(rng, (d.max - d.min) * 3 - 1);
+    info.total = total;
+    for (let r = 0; r < 3; r++) {
+      const x = pick(rng, dom), y = pick(rng, dom);
+      const z = d.mod ? pzNorm(a, total - x - y) : total - x - y;
+      if (z === null || z < d.min || z > d.max) return null;
+      g[r][0] = x; g[r][1] = y; g[r][2] = z;
+    }
+  } else if (kind === 'max' || kind === 'min') {
+    if (PZ_ATTR[a].mod) return null;
+    for (let r = 0; r < 3; r++) {
+      const x = pick(rng, dom), y = pick(rng, dom);
+      g[r][0] = x; g[r][1] = y; g[r][2] = kind === 'max' ? Math.max(x, y) : Math.min(x, y);
+    }
   } else if (kind === 'diff') {
     for (let r = 0; r < 3; r++) {
       const x = pick(rng, dom), y = pick(rng, dom), z = pzNorm(a, x - y);
@@ -775,7 +869,7 @@ function pzGenAttr(a, kind, rng) {
     const shift = rng() < 0.5 ? 1 : 2;
     for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) g[r][c] = S[(r * shift + c) % 3];
   }
-  const pred = pzPredict(a, g);
+  const pred = pzPredict(a, g, ext);
   if (pred.length !== 1 || pred[0] !== g[2][2]) return null;
   return info;
 }
@@ -794,6 +888,18 @@ function pzDescribe(a) {
   if (a.kind === 'both') return label + ': 가로로 한 칸마다 ' + st(a.q) + ', 세로로 한 칸마다 ' + st(a.p);
   if (a.kind === 'sum') return label + ': 각 줄에서 첫째 칸과 둘째 칸을 더하면 셋째 칸' + (a.name === 'rot' ? ' (각도를 더함)' : '');
   if (a.kind === 'diff') return label + ': 각 줄에서 첫째 칸에서 둘째 칸을 빼면 셋째 칸' + (a.name === 'rot' ? ' (각도를 뺌)' : '');
+  if (a.kind === 'steprow') {
+    return label + ': 가로 변화가 줄마다 달라짐 (첫 줄 ' + st(a.q) + ', 둘째 줄 ' + st(a.q + a.k) + ', 셋째 줄 ' + st(a.q + 2 * a.k) + ')' +
+      (a.p !== 0 ? ', 줄의 시작값은 아래 줄로 갈 때마다 ' + st(a.p) : ', 줄의 시작값은 모두 같음');
+  }
+  if (a.kind === 'balance') return label + ': 각 줄의 세 칸을 모두 더한 값이 같음' + (a.name === 'rot' ? ' (각도를 더함)' : '');
+  if (a.kind === 'max') return label + ': 각 줄에서 첫째·둘째 칸 중 큰 값이 셋째 칸';
+  if (a.kind === 'min') return label + ': 각 줄에서 첫째·둘째 칸 중 작은 값이 셋째 칸';
+  if (a.kind === 'link') {
+    const la = PZ_ATTR[a.src].label;
+    const vt = function (n, v) { return n === 'rot' ? v * 45 + '°' : String(v); };
+    return label + ': 같은 칸의 ' + la + '로 정해짐 — ' + la + ' ' + vt(a.src, PZ_ATTR[a.src].min) + '일 때 ' + vt(a.name, a.b0) + ', ' + la + '가 1 커질 때마다 ' + st(a.alpha) + ' (범위를 넘으면 반대쪽 끝으로 돌아옴)';
+  }
   if (a.kind === 'accel') {
     const across = '가로로 ' + (a.e !== 0 ? '첫 변화 ' + st(a.q) + ', 그다음 변화 ' + st(a.q + a.e) : '한 칸마다 ' + st(a.q));
     const down = '세로로 ' + (a.f !== 0 ? '첫 변화 ' + st(a.p) + ', 그다음 변화 ' + st(a.p + a.f) : '한 칸마다 ' + st(a.p));
@@ -805,7 +911,7 @@ function pzGenerate(level, rng) {
   rng = rng || Math.random;
   level = Math.max(1, Math.min(PZ_MAX, Math.round(level) || 1));
   const nAttr = PZ_NATTR[level];
-  const pool = level <= 2 ? ['num', 'rot'] : (level <= 5 ? ['num', 'rot', 'size'] : ['num', 'rot', 'size', 'dots']);
+  const pool = level <= 2 ? ['num', 'rot'] : (level <= 5 ? ['num', 'rot', 'size'] : (level <= 10 ? ['num', 'rot', 'size', 'dots'] : ['num', 'rot', 'size', 'dots', 'tick']));
   const kindPool = PZ_KINDS[level];
   const hardPool = kindPool.filter(function (k) { return PZ_COMPLEX.indexOf(k) >= 0; });
   const minComplex = PZ_MIN_COMPLEX[level] || 0;
@@ -817,20 +923,69 @@ function pzGenerate(level, rng) {
   };
   for (let tries = 0; tries < 200; tries++) {
     const names = shuffled(rng, pool).slice(0, nAttr).sort(function (a, b) { return PZ_ORDER.indexOf(a) - PZ_ORDER.indexOf(b); });
-    // The first minComplex attributes, in random order, get a hard rule; the rest draw from the whole pool.
+    const cfg = PZ_CFG[level] || null;
+    const ext = !!cfg;
+    const order = shuffled(rng, names.map(function (_, i) { return i; }));
+    // Levels 11+: some attributes are decoded from another attribute of the same cell (cfg.link of them);
+    // among the rest, cfg.newK use a new rule kind and the others a hard classic one.
     const kinds = [];
-    shuffled(rng, names.map(function (_, i) { return i; })).forEach(function (idx, rank) {
-      kinds[idx] = pick(rng, usable(names[idx], rank < minComplex ? hardPool : kindPool));
-    });
+    const linked = {};
+    if (cfg) {
+      order.slice(0, cfg.link).forEach(function (idx) { linked[idx] = true; kinds[idx] = 'link'; });
+      const indep = order.slice(cfg.link);
+      const newPool = PZ_NEW.filter(function (k) { return true; });
+      indep.forEach(function (idx, rank) {
+        const nm = names[idx];
+        const ok = function (list) { return list.filter(function (k) { return !((k === 'sum' || k === 'steprow') && nm === 'size') && !((k === 'max' || k === 'min') && nm === 'rot'); }); };
+        kinds[idx] = pick(rng, ok(rank < cfg.newK ? newPool : PZ_COMPLEX));
+      });
+    } else {
+      // The first minComplex attributes, in random order, get a hard rule; the rest draw from the whole pool.
+      order.forEach(function (idx, rank) {
+        kinds[idx] = pick(rng, usable(names[idx], rank < minComplex ? hardPool : kindPool));
+      });
+    }
     // Attributes are solved independently, so each one is retried until its own grid has exactly one answer.
     const attrs = [];
     let failed = false;
     for (let i = 0; i < names.length && !failed; i++) {
+      if (linked[i]) { attrs.push(null); continue; }
       let a = null;
-      for (let k = 0; k < 500 && !a; k++) a = pzGenAttr(names[i], kinds[i], rng);
-      if (a) attrs.push(a); else failed = true;
+      for (let k = 0; k < 500 && !a; k++) a = pzGenAttr(names[i], kinds[i], rng, ext);
+      if (a) attrs[i] = a; else failed = true;
     }
     if (failed) continue;
+    for (let i = 0; i < names.length && !failed; i++) {
+      if (!linked[i]) continue;
+      const srcs = attrs.filter(function (x) { return x && x.kind !== 'link'; });
+      let info = null;
+      for (let k = 0; k < 40 && !info; k++) {
+        const src = pick(rng, srcs);
+        const alpha = pick(rng, PZ_LINK_ALPHAS);
+        const b0 = pick(rng, pzDomain(names[i]));
+        const g = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+        const seenV = {};
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { g[r][c] = pzLinkVal(names[i], src.name, alpha, b0, src.g[r][c]); seenV[g[r][c]] = true; }
+        if (Object.keys(seenV).length >= 2) info = { name: names[i], kind: 'link', src: src.name, alpha: alpha, b0: b0, g: g };
+      }
+      if (info) attrs[i] = info; else failed = true;
+    }
+    if (failed) continue;
+    if (ext) {
+      // Whole-puzzle check: for every attribute, rules of its own and links from any other attribute must all agree on one answer.
+      let unique = true;
+      attrs.forEach(function (x) {
+        const set = {};
+        pzPredict(x.name, x.g, true).forEach(function (v) { set[v] = true; });
+        attrs.forEach(function (y) {
+          if (y === x) return;
+          pzPredictLink(x.name, x.g, y.name, y.g, y.g[2][2]).forEach(function (v) { set[v] = true; });
+        });
+        const vals = Object.keys(set);
+        if (vals.length !== 1 || Number(vals[0]) !== x.g[2][2]) unique = false;
+      });
+      if (!unique) continue;
+    }
     const cells = [];
     for (let r = 0; r < 3; r++) {
       const row = [];
@@ -866,6 +1021,24 @@ function pzGenerate(level, rng) {
               near.push(t);
             });
           });
+        }
+      }
+    }
+    // Levels 18+: some wrong answers are off by one step in three attributes at once, so no single check rules them out.
+    if (level >= 18 && names.length >= 3) {
+      for (let i = 0; i < names.length; i++) {
+        for (let j = i + 1; j < names.length; j++) {
+          for (let l = j + 1; l < names.length; l++) {
+            nearOf(names[i], answer[names[i]]).forEach(function (vi) {
+              nearOf(names[j], answer[names[j]]).forEach(function (vj) {
+                nearOf(names[l], answer[names[l]]).forEach(function (vl) {
+                  const t = Object.assign({}, answer);
+                  t[names[i]] = vi; t[names[j]] = vj; t[names[l]] = vl;
+                  near.push(t);
+                });
+              });
+            });
+          }
         }
       }
     }
@@ -951,7 +1124,7 @@ function planSession(history, levels, pzLevel) {
   const state = {
     cfg: null, channels: [], btns: [], total: 0, t: 0, fbMs: 0, trialStart: 0,
     locked: false, evaluated: false, running: false, paused: false, timer: null, nextN: 1,
-    session: null, onNext: null, breathLeft: 0, breathTimer: null, pz: null
+    session: null, onNext: null, breathLeft: 0, breathTimer: null, pz: null, pzTimer: null
   };
 
   /* ---------- settings ---------- */
@@ -1289,6 +1462,7 @@ function planSession(history, levels, pzLevel) {
   function quit() {
     clearTimeout(state.timer);
     clearTimeout(state.breathTimer);
+    clearTimeout(state.pzTimer);
     state.session = null;
     state.running = false;
     state.paused = false;
@@ -1472,7 +1646,10 @@ function planSession(history, levels, pzLevel) {
     return MODE_NAMES[it.mode] + (it.rule === 'opp' ? ' · 반대 변화' : '') + ' · N=' + it.n;
   }
   function itemSec(it) {
-    if (it.type === 'puzzle') return PZ_COUNT * (20 + 5 * it.level);
+    if (it.type === 'puzzle') {
+      const tm = pzTiming(it.level);
+      return tm ? PZ_COUNT * Math.round((tm.view + tm.answer) * 0.7) : PZ_COUNT * (20 + 5 * it.level);
+    }
     const speed = Number(getVal('speed')) || 3500;
     const S = Number(getVal('len')) || 20;
     return blockLength(it.n, S) * speed / 1000;
@@ -1583,6 +1760,9 @@ function planSession(history, levels, pzLevel) {
     if (has('dots')) {
       for (let i = 0; i < t.dots; i++) s += '<circle cx="' + (50 + (i - (t.dots - 1) / 2) * 14) + '" cy="9" r="4.5" fill="currentColor"/>';
     }
+    if (has('tick')) {
+      for (let i = 0; i < t.tick; i++) s += '<rect x="86" y="' + (24 + i * 12) + '" width="9" height="9" fill="currentColor"/>';
+    }
     return s + '</svg>';
   }
   function startPuzzleSet() {
@@ -1590,7 +1770,7 @@ function planSession(history, levels, pzLevel) {
     const set = [];
     for (let k = 0; k < PZ_COUNT; k++) set.push(pzGenerate(level));
     state.running = false;
-    state.pz = { level: level, puzzles: set, i: 0, results: [], t0: 0, answered: false, btns: [] };
+    state.pz = { level: level, puzzles: set, i: 0, results: [], t0: 0, answered: false, btns: [], timing: null, phase: 'answer', left: 0, paused: false };
     showScreen('Puzzle');
     showPuzzle();
   }
@@ -1600,8 +1780,12 @@ function planSession(history, levels, pzLevel) {
     pz.btns = [];
     pz.t0 = Date.now();
     $('pzProg').textContent = '문제 ' + (pz.i + 1) + ' / ' + PZ_COUNT + ' · 레벨 ' + pz.level;
-    $('pzPrompt').textContent = '규칙을 찾아 빈칸에 들어갈 그림을 고르세요.';
+    const tm = pzTiming(pz.level);
+    $('pzPrompt').textContent = '규칙을 찾아 빈칸에 들어갈 그림을 고르세요.' + (tm
+      ? (tm.view > 0 ? ' 그림은 ' + tm.view + '초 동안만 보이고, 가려진 뒤 ' + tm.answer + '초 안에 답해야 합니다.' : ' 제한 시간은 ' + tm.answer + '초입니다.')
+      : '');
     const grid = $('pzGrid');
+    grid.classList.remove('covered');
     grid.innerHTML = '';
     for (let r = 0; r < 3; r++) {
       for (let c = 0; c < 3; c++) {
@@ -1628,20 +1812,79 @@ function planSession(history, levels, pzLevel) {
     $('pzFb').className = 'feedback';
     $('pzExplain').textContent = '';
     $('btnPzNext').hidden = true;
+    startPzTimer();
+  }
+  function paintPzTimer(restartBar) {
+    const pz = state.pz;
+    $('pzTimer').textContent = pz.phase === 'view'
+      ? '관찰 ' + pz.left + '초 · 이후 그림이 가려지고 보기가 열립니다'
+      : '답하기 ' + pz.left + '초' + (pz.timing.view > 0 ? ' · 그림이 가려졌습니다' : '');
+    if (restartBar) {
+      const bar = $('pzBar');
+      bar.classList.remove('run');
+      void bar.offsetWidth;
+      bar.style.animationPlayState = 'running';
+      bar.style.setProperty('--dur', (pz.left * 1000) + 'ms');
+      bar.classList.add('run');
+    }
+  }
+  function startPzTimer() {
+    const pz = state.pz;
+    clearTimeout(state.pzTimer);
+    pz.timing = pzTiming(pz.level);
+    pz.paused = false;
+    $('pzTimerRow').hidden = !pz.timing;
+    if (!pz.timing) return;
+    pz.phase = pz.timing.view > 0 ? 'view' : 'answer';
+    pz.left = pz.phase === 'view' ? pz.timing.view : pz.timing.answer;
+    pz.btns.forEach(function (b) { b.disabled = (pz.phase === 'view'); });
+    paintPzTimer(true);
+    state.pzTimer = setTimeout(pzTick, 1000);
+  }
+  function pzTick() {
+    const pz = state.pz;
+    if (!pz || pz.answered || pz.paused) return;
+    pz.left--;
+    if (pz.left <= 0) {
+      if (pz.phase === 'view') {
+        pz.phase = 'answer';
+        pz.left = pz.timing.answer;
+        $('pzGrid').classList.add('covered');
+        pz.btns.forEach(function (b) { b.disabled = false; });
+        paintPzTimer(true);
+        state.pzTimer = setTimeout(pzTick, 1000);
+      } else {
+        settlePuzzle(-1, null);
+      }
+      return;
+    }
+    paintPzTimer(false);
+    state.pzTimer = setTimeout(pzTick, 1000);
   }
   function answerPuzzle(k, btn) {
     const pz = state.pz;
+    if (!pz || (pz.timing && pz.phase === 'view')) return;
+    settlePuzzle(k, btn);
+  }
+  // k < 0 means the time ran out.
+  function settlePuzzle(k, btn) {
+    const pz = state.pz;
     if (!pz || pz.answered) return;
     pz.answered = true;
+    clearTimeout(state.pzTimer);
+    if (pz.timing) $('pzBar').style.animationPlayState = 'paused';
+    $('pzGrid').classList.remove('covered');
     const p = pz.puzzles[pz.i];
-    const ok = (k === p.correct);
-    pz.results.push({ ok: ok, sec: (Date.now() - pz.t0) / 1000, explain: p.explain });
+    const timedOut = k < 0;
+    const ok = !timedOut && k === p.correct;
+    const sec = timedOut ? pz.timing.view + pz.timing.answer : (Date.now() - pz.t0) / 1000;
+    pz.results.push({ ok: ok, timeout: timedOut, sec: sec, explain: p.explain });
     pz.btns.forEach(function (x, j) {
       x.disabled = true;
       if (j === p.correct) x.classList.add('right');
     });
-    if (!ok) btn.classList.add('wrong');
-    $('pzFb').textContent = ok ? '정답' : '오답';
+    if (!ok && btn) btn.classList.add('wrong');
+    $('pzFb').textContent = timedOut ? '시간 초과' : (ok ? '정답' : '오답');
     $('pzFb').className = 'feedback ' + (ok ? 'ok' : 'bad');
     $('pzExplain').textContent = '규칙 · ' + p.explain;
     $('btnPzNext').textContent = pz.i < PZ_COUNT - 1 ? '다음 문제' : '결과 보기';
@@ -1679,7 +1922,7 @@ function planSession(history, levels, pzLevel) {
     pz.results.forEach(function (r, i) {
       const line = document.createElement('p');
       line.className = 'hint';
-      line.textContent = (i + 1) + '. ' + (r.ok ? '정답' : '오답') + ' · ' + r.explain;
+      line.textContent = (i + 1) + '. ' + (r.timeout ? '시간 초과' : (r.ok ? '정답' : '오답')) + ' · ' + r.explain;
       list.appendChild(line);
     });
     body.appendChild(list);
@@ -1723,6 +1966,19 @@ function planSession(history, levels, pzLevel) {
   });
   document.addEventListener('visibilitychange', function () {
     if (document.hidden && state.running) pause();
+    // A timed puzzle stops its clock while the page is in the background and continues when it returns.
+    const pz = state.pz;
+    if (pz && pz.timing && !pz.answered && $('screenPuzzle').hidden === false) {
+      if (document.hidden) {
+        pz.paused = true;
+        clearTimeout(state.pzTimer);
+        $('pzBar').style.animationPlayState = 'paused';
+      } else if (pz.paused) {
+        pz.paused = false;
+        $('pzBar').style.animationPlayState = 'running';
+        state.pzTimer = setTimeout(pzTick, 1000);
+      }
+    }
   });
   $('settings').addEventListener('change', function (e) {
     const t = e && e.target;
